@@ -3,13 +3,13 @@
 ## Source: https://github.com/hexojs/hexo/
 
 # Site
-title: Hexo
+title: 六脉神间
 subtitle:
-description:
+description: Life is a strugle #一个人的指手画脚
 keywords:
 author: Fans Chou
-language:
-timezone:
+language: zh-Hans
+timezone: 
 
 # URL
 ## If your site is put in a subdirectory, set url as 'http://yoursite.com/child' and root as '/child/'
@@ -25,7 +25,7 @@ tag_dir: tags
 archive_dir: archives
 category_dir: categories
 code_dir: downloads/code
-i18n_dir: zh_Hans
+i18n_dir: :lang
 skip_render:
 
 # Writing
@@ -79,5 +79,5 @@ theme: next
 ## Docs: https://hexo.io/docs/deployment.html
 deploy:
   type: git
-  repository: https://github.com/FansChou/FansChou.github.io.git
+  repository: git@github.com:FansChou/FansChou.github.io.git #https://github.com/FansChou/FansChou.github.io.git
   branch: master
