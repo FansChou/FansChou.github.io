@@ -2,6 +2,7 @@
 title: Hexo安装部署与同步
 date: 2018-08-16 22:36:53
 tags: Hexo
+categories: 环境安装
 ---
 
 > 本文介绍了如何安装和部署 Hexo 到 Github Pages 上，并且利用 Github 进行静态网页和博客书写环境的同步。
