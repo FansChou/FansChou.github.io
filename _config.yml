@@ -7,7 +7,7 @@ title: 六脉神间
 subtitle:
 description: 一个人的指手画脚
 keywords:
-author: Fans Chou
+author: Fan Zhou
 language: zh-Hans
 timezone: 
 
@@ -81,3 +81,9 @@ deploy:
   type: git
   repository: git@github.com:FansChou/FansChou.github.io.git #https://github.com/FansChou/FansChou.github.io.git
   branch: master
+
+# 自动生成sitemap
+sitemap:
+  path: sitemap.xml
+baidusitemap:
+  path: baidusitemap.xml
