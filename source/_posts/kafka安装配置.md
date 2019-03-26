@@ -13,7 +13,7 @@ categories: 环境安装
 
 - 安装资料下载
   - kafka安装包，来自[kafka官方下载](http://kafka.apache.org/downloads)，可以自行选择版本
-    ![下载](http://p7p01i4ci.bkt.clouddn.com/diosfun/image/20180424/01/20180424_01_001.png)
+    {% 20180424_01_001.png kafka官方下载 %}
 
 # 开始安装
 
@@ -33,10 +33,10 @@ categories: 环境安装
 ## 启动文件修改
 
 - 在根目录下找到bin/windows文件夹，用文本编辑器修改`kafka-run-class.bat`文件
-  ![](http://p7p01i4ci.bkt.clouddn.com/diosfun/image/20180424/01/20180424_01_002.png)
+  {% 20180424_01_002.png kafka-run-class %}
   我从官网下载的是编译好的安装包，在这个文件里留有一些问题，由于安装包已经编译好，其实上面对文件夹很多的扫描是没有必要的，我在安装之后的启动过程中报了一下找不到主类的错误，琢磨了很久，将上面对一些无效文件夹的扫描全部删除掉，遂解决了报错的问题。但我不能完全确定是否是因为这个导致报错，如果有出现类似的错误，可以试着操作一下。
   另外一个问题就是，Windows下的环境变量配置的时候，有些目录是带有空格的，这个也会导致报错，典型的就是如果JDK安装在C盘的Program Files下时的JAVA_HOME配置
-  ![](http://p7p01i4ci.bkt.clouddn.com/diosfun/image/20180424/01/20180424_01_003.png)
+  {% 20180424_01_003.png kafka-run-class %}
   这里将%CLASSPATH%外面加上双引号，用来解决这种情况
 - 这里再多说一句，早前的kafka版本需要额外下载一个zookeeper，用来运行kafka，现在新的版本已经自带了一个zookeeper的server，直接启动即可。后面在启动服务时也会提到。
   到这里，配置的问题基本解决了，下面开始启动服务
@@ -49,44 +49,38 @@ categories: 环境安装
 
 1. 启动zookeeper
 
-   ```shell
-   ./bin/windows/zookeeper-server-start.bat ./config/zookeeper.properties
-   
-   ```
+    ```shell
+    ./bin/windows/zookeeper-server-start.bat ./config/zookeeper.properties
+    ```
 
 2. 启动kafka
 
-   ```shell
-   ./bin/windows/kafka-server-start.bat ./config/server.properties
-   
-   ```
+    ```shell
+    ./bin/windows/kafka-server-start.bat ./config/server.properties
+    ```
 
 3. 创建topic，这里命名为test
 
-   ```shell
-   ./bin/windows/kafka-topics.bat --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic test
-   
-   ```
+    ```shell
+    ./bin/windows/kafka-topics.bat --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic test
+    ```
 
 4. 启动生产者客户端
 
-   ```shell
-   ./bin/windows/kafka-console-producer.bat --broker-list localhost:9092 --topic test
-   
-   ```
+    ```shell
+    ./bin/windows/kafka-console-producer.bat --broker-list localhost:9092 --topic test
+    ```
 
 5. 启动消费者客户端
 
-   ```shell
-   ./bin/windows/kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic test --from-beginning This is a message
-   
-   ```
+    ```shell
+    ./bin/windows/kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic test --from-beginning This is a message
+    ```
 
-   PS：最开始，我是单独下载zookeeper配置的server，在启动消费者客户端时会发生报错，但是依旧可以完成发送和订阅的操作，也把启动命令记在下面
+PS：最开始，我是单独下载zookeeper配置的server，在启动消费者客户端时会发生报错，但是依旧可以完成发送和订阅的操作，也把启动命令记在下面
 
 ```shell
 ./bin/windows/kafka-console-consumer.bat --zookeeper localhost:2181 --topic test
-
 ```
 
 接下来就可以在第4步打开的客户端上输入信息并回车，再进入第5步打开的客户端上查看是否收到了订阅
