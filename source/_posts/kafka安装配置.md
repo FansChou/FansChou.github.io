@@ -13,7 +13,7 @@ categories: 环境安装
 
 - 安装资料下载
   - kafka安装包，来自[kafka官方下载](http://kafka.apache.org/downloads)，可以自行选择版本
-    {% 20180424_01_001.png kafka官方下载 %}
+    {% asset_img 20180424_01_001.png kafka官方下载 %}
 
 # 开始安装
 
@@ -33,10 +33,10 @@ categories: 环境安装
 ## 启动文件修改
 
 - 在根目录下找到bin/windows文件夹，用文本编辑器修改`kafka-run-class.bat`文件
-  {% 20180424_01_002.png kafka-run-class %}
+  {% asset_img 20180424_01_002.png kafka-run-class %}
   我从官网下载的是编译好的安装包，在这个文件里留有一些问题，由于安装包已经编译好，其实上面对文件夹很多的扫描是没有必要的，我在安装之后的启动过程中报了一下找不到主类的错误，琢磨了很久，将上面对一些无效文件夹的扫描全部删除掉，遂解决了报错的问题。但我不能完全确定是否是因为这个导致报错，如果有出现类似的错误，可以试着操作一下。
   另外一个问题就是，Windows下的环境变量配置的时候，有些目录是带有空格的，这个也会导致报错，典型的就是如果JDK安装在C盘的Program Files下时的JAVA_HOME配置
-  {% 20180424_01_003.png kafka-run-class %}
+  {% asset_img 20180424_01_003.png kafka-run-class %}
   这里将%CLASSPATH%外面加上双引号，用来解决这种情况
 - 这里再多说一句，早前的kafka版本需要额外下载一个zookeeper，用来运行kafka，现在新的版本已经自带了一个zookeeper的server，直接启动即可。后面在启动服务时也会提到。
   到这里，配置的问题基本解决了，下面开始启动服务
