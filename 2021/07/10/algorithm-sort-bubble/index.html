@@ -1,0 +1,542 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="format-detection" content="telephone=no"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><link rel="icon" href="/images/icons/favicon-16x16.png?v=2.6.2" type="image/png" sizes="16x16"><link rel="icon" href="/images/icons/favicon-32x32.png?v=2.6.2" type="image/png" sizes="32x32"><meta name="msvalidate.01" content="F4212502904AF5E036E6798B8FD47AC5"><meta name="baidu-site-verification" content="code-ghVfCKUSid"><meta name="360-site-verification" content="4d866e5e79eaddc2f382d27f6d2dc108"><meta name="sogou_site_verification" content="Zq1e6uOwIX"><meta name="description" content="本篇文章介绍了冒泡排序的排序过程，说一说它的时间复杂度和稳定性，以及可以对它进行的一些优化。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="排序算法系列之冒泡排序">
+<meta property="og:url" content="https://www.fanschou.com/2021/07/10/algorithm-sort-bubble/index.html">
+<meta property="og:site_name" content="六脉神间">
+<meta property="og:description" content="本篇文章介绍了冒泡排序的排序过程，说一说它的时间复杂度和稳定性，以及可以对它进行的一些优化。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_001.jpeg">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_002.jpeg">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_003.jpeg">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_004.jpeg">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_005.jpeg">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_006.jpeg">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_007.jpeg">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_008.jpeg">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_009.jpeg">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_010.png">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_011.png">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_012.png">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_013.png">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_014.png">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_015.png">
+<meta property="og:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_016.gif">
+<meta property="article:published_time" content="2021-07-10T14:36:11.000Z">
+<meta property="article:modified_time" content="2021-07-10T14:36:11.000Z">
+<meta property="article:author" content="Fan Zhou">
+<meta property="article:tag" content="算法与数据结构">
+<meta property="article:tag" content="排序算法">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_001.jpeg"><title>排序算法系列之冒泡排序 | 六脉神间</title><link ref="canonical" href="https://www.fanschou.com/2021/07/10/algorithm-sort-bubble/"><link rel="dns-prefetch" href="https://cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.12.1/css/all.min.css" type="text/css"><link rel="stylesheet" href="//cdn.jsdelivr.net/gh/fancyapps/fancybox@3.5.7/dist/jquery.fancybox.min.css" type="text/css"><link rel="stylesheet" href="/css/index.css?v=2.6.2"><link rel="dns-prefetch" href="https://www.googletagmanager.com"><link rel="dns-prefetch" href="https://hm.baidu.com"><script src="https://www.googletagmanager.com/gtag/js?id=UA-128986441-1" async="" data-pjax=""></script><script data-pjax="">if (window.location.hostname !== 'localhost') {
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){ dataLayer.push(arguments); }
+  gtag('js', new Date());
+  gtag('config', 'UA-128986441-1');
+}</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement('script');
+  hm.src = 'https://hm.baidu.com/hm.js?1e25ae116836a724d59f9f36facf49f5';
+  hm.async = true;
+
+  if (true) {
+    hm.setAttribute('data-pjax', '');
+  }
+  var s = document.getElementsByTagName('script')[0]; 
+  s.parentNode.insertBefore(hm, s);
+})();</script><script>var Stun = window.Stun || {};
+var CONFIG = {
+  root: '/',
+  algolia: undefined,
+  assistSearch: undefined,
+  fontIcon: {"prompt":{"success":"fas fa-check-circle","info":"fas fa-arrow-circle-right","warning":"fas fa-exclamation-circle","error":"fas fa-times-circle"},"copyBtn":"fas fa-copy"},
+  sidebar: {"offsetTop":"20px","tocMaxDepth":6},
+  header: {"enable":true,"showOnPost":true,"scrollDownIcon":true},
+  postWidget: {"endText":true},
+  nightMode: {"enable":true},
+  back2top: {"enable":true},
+  codeblock: {"style":"carbon","highlight":"ocean","wordWrap":false},
+  reward: false,
+  fancybox: true,
+  zoomImage: {"gapAside":"20px"},
+  galleryWaterfall: {"colWidth":"220px","gapX":"10px"},
+  lazyload: false,
+  pjax: {"avoidBanner":true},
+  externalLink: {"icon":{"enable":true,"name":"fas fa-external-link-alt"}},
+  shortcuts: undefined,
+  prompt: {"copyButton":"复制","copySuccess":"复制成功","copyError":"复制失败"},
+  sourcePath: {"js":"js","css":"css","images":"images"},
+};
+
+window.CONFIG = CONFIG;</script><meta name="generator" content="Hexo 5.4.0"><link rel="alternate" href="/atom.xml" title="六脉神间" type="application/atom+xml">
+</head><body><div class="container" id="container"><header class="header" id="header"><div class="header-inner"><nav class="header-nav header-nav--fixed"><div class="header-nav-inner"><div class="header-nav-menubtn"><i class="fas fa-bars"></i></div><div class="header-nav-menu"><div class="header-nav-menu-item"><a class="header-nav-menu-item__link" href="/"><span class="header-nav-menu-item__icon"><i class="fas fa-home"></i></span><span class="header-nav-menu-item__text">首页</span></a></div><div class="header-nav-menu-item"><a class="header-nav-menu-item__link" href="/archives/"><span class="header-nav-menu-item__icon"><i class="fas fa-folder-open"></i></span><span class="header-nav-menu-item__text">归档</span></a></div><div class="header-nav-menu-item"><a class="header-nav-menu-item__link" href="/categories/"><span class="header-nav-menu-item__icon"><i class="fas fa-layer-group"></i></span><span class="header-nav-menu-item__text">分类</span></a></div><div class="header-nav-menu-item"><a class="header-nav-menu-item__link" href="/tags/"><span class="header-nav-menu-item__icon"><i class="fas fa-tags"></i></span><span class="header-nav-menu-item__text">标签</span></a></div><div class="header-nav-menu-item"><a class="header-nav-menu-item__link" href="javascript:;" onclick="return false;"><span class="header-nav-menu-item__icon"><i class="fas fa-user"></i></span><span class="header-nav-menu-item__text">关于</span></a><div class="header-nav-submenu"><div class="header-nav-submenu-item"><a class="header-nav-submenu-item__link" href="/author/"><span class="header-nav-submenu-item__icon"><i class="fas fa-book-open"></i></span><span class="header-nav-submenu-item__text">作者</span></a></div><div class="header-nav-submenu-item"><a class="header-nav-submenu-item__link" href="/friends/"><span class="header-nav-submenu-item__icon"><i class="fas fa-user-friends"></i></span><span class="header-nav-submenu-item__text">友链</span></a></div></div></div></div><div class="header-nav-search"><span class="header-nav-search__icon"><i class="fas fa-search"></i></span><span class="header-nav-search__text">搜索</span></div><div class="header-nav-mode"><div class="mode"><div class="mode-track"><span class="mode-track-moon"></span><span class="mode-track-sun"></span></div><div class="mode-thumb"></div></div></div></div></nav><div class="header-banner"><div class="header-banner-info"><div class="header-banner-info__title">六脉神间</div><div class="header-banner-info__subtitle">一个人的指手画脚</div></div><div class="header-banner-arrow"><div class="header-banner-arrow__icon"><i class="fas fa-angle-down"></i></div></div></div></div></header><main class="main" id="main"><div class="main-inner"><div class="content-wrap" id="content-wrap"><div class="content" id="content"><!-- Just used to judge whether it is an article page--><div id="is-post"></div><div class="post"><header class="post-header"><h1 class="post-title">排序算法系列之冒泡排序</h1><div class="post-meta"><span class="post-meta-item post-meta-item--createtime"><span class="post-meta-item__icon"><i class="far fa-calendar-plus"></i></span><span class="post-meta-item__info">发表于</span><span class="post-meta-item__value">2021-07-10</span></span><span class="post-meta-item post-meta-item--updatetime"><span class="post-meta-item__icon"><i class="far fa-calendar-check"></i></span><span class="post-meta-item__info">更新于</span><span class="post-meta-item__value">2021-07-10</span></span><span class="post-meta-item post-meta-item--wordcount"><span class="post-meta-item__icon"><i class="far fa-file-word"></i></span><span class="post-meta-item__info">字数统计</span><span class="post-meta-item__value">2.4k</span></span><span class="post-meta-item post-meta-item--readtime"><span class="post-meta-item__icon"><i class="far fa-clock"></i></span><span class="post-meta-item__info">阅读时长</span><span class="post-meta-item__value">15分</span></span><span class="post-meta-item post-meta-item--visitors"><span class="post-meta-item__icon"><i class="fas fa-eye"></i></span><span class="post-meta-item__info">阅读次数</span><span class="post-meta-item__value" id="busuanzi_value_page_pv"></span></span></div></header><div class="post-body"><p>冒泡排序是一个比较经典和简单的排序算法，经典和简单到如果有人让我随便写一个排序算法，我第一时间就会写冒泡排序🤣。今天我们从算法本身、时间复杂度以及稳定性方面来看看冒泡排序，并且思考一下能做怎样的优化。</p>
+
+        <h2 id="排序思想"   >
+          <a href="#排序思想" class="heading-link"><i class="fas fa-link"></i></a><a class="markdownIt-Anchor" href="#排序思想"></a> 排序思想</h2>
+      
+<p>对值的排序，抽象来看，其实做了两个步骤：<strong>比较</strong> 和 <strong>将值放在正确的位置</strong>。基于这两点，我们发现「比较」这个动作是所有排序算法都会做的，不同的排序算法之间，他们如何将值放在正确的位置几乎就是核心点。冒泡排序如何将值放在正确的位置呢？</p>
+<p>首先，冒泡排序的名字就揭示了它的核心思想，就是像水中的鱼吐泡一样，慢慢冒泡上来。我们可以想象，鱼在水中吐泡时，越靠近鱼嘴的地方，泡泡越小，当靠近水面时，泡泡越大。我们借鉴这个思路，将一个待排序的队列中相邻的两个值依次比较，谁比较大，就将它交换到后面的一个位置，当一轮比较之后，我们会发现最大的值自然就会到最后面的位置。我们重复这个过程，每次都会将一个最大的值排到后面，直到最后整个待排序的队列变成有序的。就像冒泡一样，慢慢的把大的泡冒到水面上来。</p>
+<p>说了这么多抽象的方法，我们接下来借助一个例子演示一下完整的排序过程。</p>
+
+        <h2 id="排序过程"   >
+          <a href="#排序过程" class="heading-link"><i class="fas fa-link"></i></a><a class="markdownIt-Anchor" href="#排序过程"></a> 排序过程</h2>
+      
+<p>假设现在有一个待排序的队列：[4, 5, 3, 1, 8, 7, 6, 9, 2]，我们开始第一轮冒泡，<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_001.jpeg" alt="待排序队列" /></p>
+<p>首先比较第一对相邻的值[4, 5]，我们发现 5 比 4 大，并且位置也在 4 的后面，保持不动<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_002.jpeg" alt="第一次比较" /></p>
+<p>第二次比较[5, 3]，我们发现 5 比 3 大，5 的位置在 3 的前面，我们做一次交换，此时的队列变成了[4, 3, 5, 1, 8, 7, 6, 9, 2]<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_003.jpeg" alt="第二次比较" /></p>
+<p>第三次比较[5, 1]，我们发现 5 比 1 大，5 的位置在 1 的前面，我们做一次交换，此时的队列变成了[4, 3, 1, 5, 8, 7, 6, 9, 2]<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_004.jpeg" alt="第三次比较" /></p>
+<p>第四次比较[5, 8]，我们发现 8 比 5 大，5 的位置在 8 的前面，保持不动，此时的队列没有变化[4, 3, 1, 5, 8, 7, 6, 9, 2]<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_005.jpeg" alt="第四次比较" /></p>
+<p>第五次比较[8, 7]，我们发现 8 比 7 大，8 的位置在 7 的前面，我们做一次交换，此时的队列变成了[4, 3, 1, 5, 7, 8, 6, 9, 2]<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_006.jpeg" alt="第五次比较" /></p>
+<p>第六次比较[8, 6]，我们发现 8 比 6 大，8 的位置在 6 的前面，我们做一次交换，此时的队列变成了[4, 3, 1, 5, 7, 6, 8, 9, 2]<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_007.jpeg" alt="第六次比较" /></p>
+<p>第七次比较[8, 9]，我们发现 9 比 8 大，8 的位置在 9 的前面，保持不动，此时的队列没有变化[4, 3, 1, 5, 7, 6, 8, 9, 2]<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_008.jpeg" alt="第七次比较" /></p>
+<p>第八次比较[9, 2]，我们发现 9 比 2 大，9 的位置在 2 的前面，我们做一次交换，此时的队列变成了[4, 3, 1, 5, 7, 6, 8, 2, 9]<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_009.jpeg" alt="第八次比较" /></p>
+<p>此时我们发现，一轮冒泡比较已经结束，最大的数字 9 以及到了队列的最后，没有比 9 更大的「泡」了。<br />
+我们按照同样的思路进行第二轮冒泡，得到的结果为[3, 1, 4, 5, 6, 7, 2, 8, 9]，<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_010.png" alt="第二轮比较" /><br />
+进行第三轮冒泡，得到的结果为[1, 3, 4, 5, 6, 2, 7, 8, 9]，<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_011.png" alt="第三轮比较" /><br />
+进行第四轮冒泡，得到的结果为[1, 3, 4, 5, 2, 6, 7, 8, 9]，<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_012.png" alt="第四轮比较" /><br />
+进行第五轮冒泡，得到的结果为[1, 3, 4, 2, 5, 6, 7, 8, 9]，<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_013.png" alt="第五轮比较" /><br />
+进行第六轮冒泡，得到的结果为[1, 3, 2, 4, 5, 6, 7, 8, 9]，<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_014.png" alt="第六轮比较" /><br />
+进行第七轮冒泡，得到的结果为[1, 2, 3, 4, 5, 6, 7, 8, 9]，此时队列已经完全有序，排序工作结束。<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_015.png" alt="第七轮比较" /></p>
+<p>下面我们完整的看一遍动画演示<br />
+<img src="https://diosfun-1251849378.file.myqcloud.com/blog/algorithm-sort-bubble/20210710_01_016.gif" alt="完整动画" /></p>
+
+        <h2 id="代码实现"   >
+          <a href="#代码实现" class="heading-link"><i class="fas fa-link"></i></a><a class="markdownIt-Anchor" href="#代码实现"></a> 代码实现</h2>
+      
+<p>了解了冒泡排序的整个排序过程，我们用代码将它实现一遍</p>
+<figure class="highlight java"><div class="table-container"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">BubbleSort</span> </span>&#123;</span><br><span class="line">   <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">int</span>[] bubbleSort(<span class="keyword">int</span>[] arr) &#123;</span><br><span class="line">       <span class="keyword">if</span> (arr == <span class="keyword">null</span> || arr.length &lt; <span class="number">2</span>) &#123;</span><br><span class="line">           <span class="keyword">return</span> arr;</span><br><span class="line">       &#125;</span><br><span class="line">       <span class="keyword">int</span> n = arr.length;</span><br><span class="line">       <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; n; i++) &#123;</span><br><span class="line">           <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; n; j++) &#123;</span><br><span class="line">               <span class="keyword">if</span> (arr[j + <span class="number">1</span>] &lt; arr[j]) &#123;</span><br><span class="line">                    <span class="keyword">int</span> t = arr[j];</span><br><span class="line">                    arr[j] = arr[j + <span class="number">1</span>];</span><br><span class="line">                    arr[j + <span class="number">1</span>] = t;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> arr;</span><br><span class="line">    &#125;</span><br><span class="line">)</span><br></pre></td></tr></table></div></figure>
+
+        <h3 id="第一次代码优化"   >
+          <a href="#第一次代码优化" class="heading-link"><i class="fas fa-link"></i></a><a class="markdownIt-Anchor" href="#第一次代码优化"></a> 第一次代码优化</h3>
+      
+<p>我们仔细观察排序的过程，可以发现一个规律，就是每进行完一轮冒泡，待排序队列的尾部区间会在原本有序的基础上多加一个数。例如，第三轮的中间结果是[1, 3, 4, 5, 6, 2, 7, 8, 9]，此时尾部的[7, 8, 9]是有序的，第四轮的中间结果是[1, 3, 4, 5, 2, 6, 7, 8, 9]，此时尾部的[6, 7, 8, 9]是有序的。也就是说，在第 n 轮，待排序的队列的尾部 <code>n - 1</code> 个元素已经是有序的了，那么这一轮我们可以不再对这一段进行比较和交换。所以我们可以对上面的代码做出第一次优化。</p>
+<figure class="highlight java"><div class="table-container"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">BubbleSort</span> </span>&#123;</span><br><span class="line">   <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">int</span>[] bubbleSort(<span class="keyword">int</span>[] arr) &#123;</span><br><span class="line">       <span class="keyword">if</span> (arr == <span class="keyword">null</span> || arr.length &lt; <span class="number">2</span>) &#123;</span><br><span class="line">           <span class="keyword">return</span> arr;</span><br><span class="line">       &#125;</span><br><span class="line">       <span class="keyword">int</span> n = arr.length;</span><br><span class="line">       <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; n; i++) &#123;</span><br><span class="line">           <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; n - i - <span class="number">1</span>; j++) &#123;</span><br><span class="line">               <span class="keyword">if</span> (arr[j + <span class="number">1</span>] &lt; arr[j]) &#123;</span><br><span class="line">                    <span class="keyword">int</span> t = arr[j];</span><br><span class="line">                    arr[j] = arr[j + <span class="number">1</span>];</span><br><span class="line">                    arr[j + <span class="number">1</span>] = t;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> arr;</span><br><span class="line">    &#125;</span><br><span class="line">)</span><br></pre></td></tr></table></div></figure>
+
+        <h3 id="第二次代码优化"   >
+          <a href="#第二次代码优化" class="heading-link"><i class="fas fa-link"></i></a><a class="markdownIt-Anchor" href="#第二次代码优化"></a> 第二次代码优化</h3>
+      
+<p>经过第一次的优化，我们减少了第二轮循环的次数，继续观察还有什么可以优化的地方。上面的代码，我们认定的是按这种办法全部循环完，则整个队列变得有序，那么有没有一种办法，在没有全部循环完毕，也可以判断出队列已经有序了呢？</p>
+<p>我们看到循环最主要的目的是将值较大的元素放到后面，那么假如从开始的第一对到结尾的最后一对，相邻的元素之间都没有发生交换的操作，这意味着右边的元素总是大于等于左边的元素，此时的数组已经可以认为是有序的了，我们无需再对剩余的元素重复比较下去了。用这个办法，我们可以不用等待循环全部走完，提前终止循环的过程，我们再对代码做一次优化。</p>
+<figure class="highlight java"><div class="table-container"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">BubbleSort</span> </span>&#123;</span><br><span class="line">   <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">int</span>[] bubbleSort(<span class="keyword">int</span>[] arr) &#123;</span><br><span class="line">       <span class="keyword">if</span> (arr == <span class="keyword">null</span> || arr.length &lt; <span class="number">2</span>) &#123;</span><br><span class="line">           <span class="keyword">return</span> arr;</span><br><span class="line">       &#125;</span><br><span class="line">       <span class="keyword">int</span> n = arr.length;</span><br><span class="line">       <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; n; i++) &#123;</span><br><span class="line">           <span class="keyword">boolean</span> flag = <span class="keyword">true</span>;</span><br><span class="line">           <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; n - i - <span class="number">1</span>; j++) &#123;</span><br><span class="line">                <span class="keyword">if</span> (arr[j + <span class="number">1</span>] &lt; arr[j]) &#123;</span><br><span class="line">                    flag = <span class="keyword">false</span>;</span><br><span class="line">                    <span class="keyword">int</span> t = arr[j];</span><br><span class="line">                    arr[j] = arr[j + <span class="number">1</span>];</span><br><span class="line">                    arr[j + <span class="number">1</span>] = t;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="comment">//一趟下来是否发生位置交换</span></span><br><span class="line">            <span class="keyword">if</span>(<span class="keyword">false</span>)</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> arr;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></div></figure>
+
+        <h3 id="代码优化小结"   >
+          <a href="#代码优化小结" class="heading-link"><i class="fas fa-link"></i></a><a class="markdownIt-Anchor" href="#代码优化小结"></a> 代码优化小结</h3>
+      
+<p>上面我们对代码做了两次小的优化，简单总结一下就是两个方向：</p>
+<ul>
+<li>降低复杂度：我们通过发现细节，减少循环次数，后面我们可能还能遇到直接减少循环层级的，比如从3层循环降低到2层循环</li>
+<li>剪枝：对于代码执行链路中的很多分支，如果明确不会发生，或者发生了也无意义，可以采取提前终止的办法，达到一个减去分支的目的，可以有效降低执行效率</li>
+</ul>
+
+        <h2 id="聊聊冒泡的特性"   >
+          <a href="#聊聊冒泡的特性" class="heading-link"><i class="fas fa-link"></i></a><a class="markdownIt-Anchor" href="#聊聊冒泡的特性"></a> 聊聊冒泡的特性</h2>
+      
+<p>我在<a href="https://www.fanschou.com/2021/07/03/algorithm-sort-opening/">排序算法系列之开篇</a>谈到了一些术语，有一些是我们谈及算法时一定会讨论的，如复杂度等，下面我们就几个纬度简单聊聊冒泡的一些特性。</p>
+
+        <h3 id="复杂度"   >
+          <a href="#复杂度" class="heading-link"><i class="fas fa-link"></i></a><a class="markdownIt-Anchor" href="#复杂度"></a> 复杂度</h3>
+      
+
+        <h4 id="时间复杂度"   >
+          <a href="#时间复杂度" class="heading-link"><i class="fas fa-link"></i></a><a class="markdownIt-Anchor" href="#时间复杂度"></a> 时间复杂度</h4>
+      
+<p>分析一下冒泡排序的时间复杂度，可以看到最消耗时间的就是中间的两层循环，循环次数分别是 <code>n</code> 和 <code>n - i - 1</code>，那总的循环次数就是 <code>n * (n - i - 1)</code>，把它展开就是 <code>n² - n * i - n</code>，其中最大的数量级是 n²，其他的项相比平方阶来说都是不在一个数量级的。所以冒泡排序的时间复杂度为O(n²)。</p>
+
+        <h4 id="空间复杂度"   >
+          <a href="#空间复杂度" class="heading-link"><i class="fas fa-link"></i></a><a class="markdownIt-Anchor" href="#空间复杂度"></a> 空间复杂度</h4>
+      
+<p>代码运行过程中，我们只用了一个变量去做中转，交换两个位置的值，所以空间复杂度是O(1)，是常量级的复杂度。</p>
+
+        <h3 id="排序的稳定性"   >
+          <a href="#排序的稳定性" class="heading-link"><i class="fas fa-link"></i></a><a class="markdownIt-Anchor" href="#排序的稳定性"></a> 排序的稳定性</h3>
+      
+<p>冒泡排序算法是一个稳定算法，因为在值相等时，元素的相对位置没有变化。核心的点在于 <code>if (arr[j + 1] &lt; arr[j])</code> 这个判断，是只有前值大于后值时才会交换，等于时是不会交换的。当然，这里的判断也可以加上等于，就变成了不稳定排序，不过这样改可以但没必要。</p>
+
+        <h3 id="排序使用的空间"   >
+          <a href="#排序使用的空间" class="heading-link"><i class="fas fa-link"></i></a><a class="markdownIt-Anchor" href="#排序使用的空间"></a> 排序使用的空间</h3>
+      
+<p>排序时直接对数组的值进行交换，没有使用多余的存储空间，所以这是一个原地排序</p>
+
+        <h2 id="结尾"   >
+          <a href="#结尾" class="heading-link"><i class="fas fa-link"></i></a><a class="markdownIt-Anchor" href="#结尾"></a> 结尾</h2>
+      
+<p>到这里，就介绍完了有关冒泡排序相关的一些知识，如果你发现文中有任何错误，欢迎通过<a href="https://www.fanschou.com/author/#%E5%85%B3%E4%BA%8E%E7%AB%99%E7%82%B9">关于站点</a>的联系方式进行反馈。</p>
+</div><footer class="post-footer"><div class="post-ending ending"><div class="ending__text">------ 本文结束，感谢您的阅读 ------</div></div><div class="post-copyright copyright"><div class="copyright-author"><span class="copyright-author__name">本文作者: </span><span class="copyright-author__value"><a href="https://www.fanschou.com">Fan Zhou</a></span></div><div class="copyright-link"><span class="copyright-link__name">本文链接: </span><span class="copyright-link__value"><a href="https://www.fanschou.com/2021/07/10/algorithm-sort-bubble/">https://www.fanschou.com/2021/07/10/algorithm-sort-bubble/</a></span></div><div class="copyright-notice"><span class="copyright-notice__name">版权声明: </span><span class="copyright-notice__value">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en" rel="external nofollow" target="_blank">BY-NC-SA</a> 许可协议。转载请注明出处！</span></div></div><div class="post-tags"><span class="post-tags-item"><span class="post-tags-item__icon"><i class="fas fa-tag"></i></span><a class="post-tags-item__link" href="https://www.fanschou.com/tags/%E7%AE%97%E6%B3%95%E4%B8%8E%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">算法与数据结构</a></span><span class="post-tags-item"><span class="post-tags-item__icon"><i class="fas fa-tag"></i></span><a class="post-tags-item__link" href="https://www.fanschou.com/tags/%E6%8E%92%E5%BA%8F%E7%AE%97%E6%B3%95/">排序算法</a></span></div><nav class="post-paginator paginator"><div class="paginator-next"><a class="paginator-next__link" href="/2021/07/03/algorithm-sort-opening/"><span class="paginator-prev__text">排序算法系列之开篇</span><span class="paginator-next__icon"><i class="fas fa-angle-right"></i></span></a></div></nav></footer></div></div></div><div class="sidebar-wrap" id="sidebar-wrap"><aside class="sidebar" id="sidebar"><div class="sidebar-nav"><span class="sidebar-nav-toc current">文章目录</span><span class="sidebar-nav-ov">站点概览</span></div><section class="sidebar-toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%92%E5%BA%8F%E6%80%9D%E6%83%B3"><span class="toc-number">1.</span> <span class="toc-text">
+           排序思想</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%92%E5%BA%8F%E8%BF%87%E7%A8%8B"><span class="toc-number">2.</span> <span class="toc-text">
+           排序过程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E5%AE%9E%E7%8E%B0"><span class="toc-number">3.</span> <span class="toc-text">
+           代码实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E6%AC%A1%E4%BB%A3%E7%A0%81%E4%BC%98%E5%8C%96"><span class="toc-number">3.1.</span> <span class="toc-text">
+           第一次代码优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E6%AC%A1%E4%BB%A3%E7%A0%81%E4%BC%98%E5%8C%96"><span class="toc-number">3.2.</span> <span class="toc-text">
+           第二次代码优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E4%BC%98%E5%8C%96%E5%B0%8F%E7%BB%93"><span class="toc-number">3.3.</span> <span class="toc-text">
+           代码优化小结</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%81%8A%E8%81%8A%E5%86%92%E6%B3%A1%E7%9A%84%E7%89%B9%E6%80%A7"><span class="toc-number">4.</span> <span class="toc-text">
+           聊聊冒泡的特性</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%8D%E6%9D%82%E5%BA%A6"><span class="toc-number">4.1.</span> <span class="toc-text">
+           复杂度</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%97%B6%E9%97%B4%E5%A4%8D%E6%9D%82%E5%BA%A6"><span class="toc-number">4.1.1.</span> <span class="toc-text">
+           时间复杂度</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%A9%BA%E9%97%B4%E5%A4%8D%E6%9D%82%E5%BA%A6"><span class="toc-number">4.1.2.</span> <span class="toc-text">
+           空间复杂度</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%92%E5%BA%8F%E7%9A%84%E7%A8%B3%E5%AE%9A%E6%80%A7"><span class="toc-number">4.2.</span> <span class="toc-text">
+           排序的稳定性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%92%E5%BA%8F%E4%BD%BF%E7%94%A8%E7%9A%84%E7%A9%BA%E9%97%B4"><span class="toc-number">4.3.</span> <span class="toc-text">
+           排序使用的空间</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%93%E5%B0%BE"><span class="toc-number">5.</span> <span class="toc-text">
+           结尾</span></a></li></ol></section><!-- ov = overview--><section class="sidebar-ov hide"><div class="sidebar-ov-author"><div class="sidebar-ov-author__avatar"><img class="sidebar-ov-author__avatar_img" src="https://diosfun-1251849378.file.myqcloud.com/blog/site/avatar.jpg" alt="avatar"></div><p class="sidebar-ov-author__text">Stay Hungary, Stay Foolish</p></div><div class="sidebar-ov-social"><a class="sidebar-ov-social-item" href="https://github.com/FansChou" target="_blank" rel="noopener" data-popover="Github" data-popover-pos="up"><span class="sidebar-ov-social-item__icon"><i class="fab fa-github"></i></span></a><a class="sidebar-ov-social-item" href="https://www.zhihu.com/people/ZHeroFan" target="_blank" rel="noopener" data-popover="知乎" data-popover-pos="up"><span class="sidebar-ov-social-item__icon"><i class="fab fa-zhihu"></i></span></a></div><div class="sidebar-ov-state"><a class="sidebar-ov-state-item sidebar-ov-state-item--posts" href="/archives/"><div class="sidebar-ov-state-item__count">6</div><div class="sidebar-ov-state-item__name">归档</div></a><a class="sidebar-ov-state-item sidebar-ov-state-item--categories" href="/categories/"><div class="sidebar-ov-state-item__count">4</div><div class="sidebar-ov-state-item__name">分类</div></a><a class="sidebar-ov-state-item sidebar-ov-state-item--tags" href="/tags/"><div class="sidebar-ov-state-item__count">6</div><div class="sidebar-ov-state-item__name">标签</div></a></div><div class="sidebar-ov-cc"><a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en" target="_blank" rel="noopener" data-popover="知识共享许可协议" data-popover-pos="up"><img src="/images/cc-by-nc-sa.svg"></a></div></section><div class="sidebar-reading"><div class="sidebar-reading-info"><span class="sidebar-reading-info__text">你已阅读了 </span><span class="sidebar-reading-info__num">0</span><span class="sidebar-reading-info__perc">%</span></div><div class="sidebar-reading-line"></div></div></aside></div><div class="clearfix"></div></div></main><footer class="footer" id="footer"><div class="footer-inner"><div><span>Copyright © 2018~2021</span><span class="footer__icon"><i class="fas fa-heart"></i></span><span>Fan Zhou</span><span class="footer__devider">|</span><span>皖ICP备2021007904号</span></div><div><span>由 <a href="http://hexo.io/" title="Hexo" target="_blank" rel="noopener">Hexo</a> 强力驱动</span><span class="footer__devider">|</span><span>主题 - <a href="https://github.com/liuyib/hexo-theme-stun/" title="Stun" target="_blank" rel="noopener">Stun</a></span></div><div class="busuanzi"><span class="busuanzi-siteuv"><span class="busuanzi-siteuv__icon"><i class="fas fa-user"></i></span><span class="busuanzi-siteuv__info">访问人数</span><span class="busuanzi-siteuv__value" id="busuanzi_value_site_uv"></span></span><span class="busuanzi-sitepv"><span class="busuanzi-siteuv__icon"><i class="fas fa-eye"></i></span><span class="busuanzi-siteuv__info">浏览总量</span><span class="busuanzi-siteuv__value" id="busuanzi_value_site_pv"></span></span></div><div><a target="_blank" href="http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490" style="display:inline-block;text-decoration:none;height:20px;line-height:20px;"><img src="https://diosfun-1251849378.file.myqcloud.com/blog/site/%E5%A4%87%E6%A1%88%E5%9B%BE%E6%A0%87.png" style="float:left;"/><p style="float:left;height:20px;line-height:20px;margin:0px 0px 0px 5px; color:#939393;">皖公网安备 34180202000490号</p></a></div></div></footer><div class="loading-bar" id="loading-bar"><div class="loading-bar__progress"></div></div><div class="back2top" id="back2top"><span class="back2top__icon"><i class="fas fa-rocket"></i></span></div></div><div class="search-mask"></div><div class="search-popup"><span class="search-close"></span><div class="search-input"><input placeholder="搜索文章（支持多关键词，请用空格分隔）"></div><div class="search-results"></div></div><script src="https://cdn.jsdelivr.net/npm/jquery@v3.4.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/velocity-animate@1.5.2/velocity.min.js"></script><script src="https://cdn.jsdelivr.net/npm/velocity-animate@1.5.2/velocity.ui.min.js"></script><script src="https://cdn.jsdelivr.net/npm/ribbon.js@latest/dist/ribbon.min.js" size="120" alpha="0.6" zIndex="-1"></script><script src="//cdn.jsdelivr.net/gh/fancyapps/fancybox@3.5.7/dist/jquery.fancybox.min.js"></script><script src="https://cdn.jsdelivr.net/npm/masonry-layout@4.2.2/dist/masonry.pkgd.min.js"></script><script>function initSearch() {
+  var isXML = true;
+  var search_path = 'search.json';
+
+  if (!search_path) {
+    search_path = 'search.xml';
+  } else if (/json$/i.test(search_path)) {
+    isXML = false;
+  }
+
+  var path = '/' + search_path;
+  $.ajax({
+    url: path,
+    dataType: isXML ? 'xml' : 'json',
+    async: true,
+    success: function (res) {
+      var datas = isXML ? $('entry', res).map(function () {
+        // 将 XML 转为 JSON
+        return {
+          title: $('title', this).text(),
+          content: $('content', this).text(),
+          url: $('url', this).text()
+        };
+      }).get() : res;
+      var $input = $('.search-input input');
+      var $result = $('.search-results');
+      // 搜索对象（标题、内容）的权重，影响显示顺序
+      var WEIGHT = { title: 100, content: 1 };
+      var searchPost = function () {
+        var searchText = $input.val().toLowerCase().trim();
+        // 根据空白字符分隔关键字
+        var keywords = searchText.split(/[\s]+/);
+        // 搜索结果
+        var matchPosts = [];
+
+        // 有多个关键字时，将原文字整个保存下来
+        if (keywords.length > 1) {
+          keywords.push(searchText);
+        }
+        // 防止未输入字符时搜索
+        if (searchText.length > 0) {
+          datas.forEach(function (data) {
+            var isMatch  = false;
+            // 没有标题的文章使用预设的 i18n 变量代替
+            var title = (data.title && data.title.trim()) || '[ 文章无标题 ]';
+            var titleLower = title && title.toLowerCase();
+            // 删除 HTML 标签 和 所有空白字符
+            var content = data.content && data.content.replace(/<[^>]+>/g, '');
+            var contentLower = content && content.toLowerCase();
+            // 删除重复的 /
+            var postURL = data.url && decodeURI(data.url).replace(/\/{2,}/g, '/');
+            // 标题中匹配到的关键词
+            var titleHitSlice = [];
+            // 内容中匹配到的关键词
+            var contentHitSlice = [];
+
+            keywords.forEach(function (keyword) {
+              /**
+              * 获取匹配的关键词的索引
+              * @param {String} keyword 要匹配的关键字
+              * @param {String} text 原文字
+              * @param {Boolean} caseSensitive 是否区分大小写
+              * @param {Number} weight 匹配对象的权重。权重大的优先显示
+              * @return {Array}
+              */
+              function getIndexByword (word, text, caseSensitive, weight) {
+                if (!word || !text) {
+                  return [];
+                };
+
+                var startIndex = 0; // 每次匹配的开始索引
+                var index = -1;     // 匹配到的索引值
+                var result = [];    // 匹配结果
+
+                if (!caseSensitive) {
+                  word = word.toLowerCase();
+                  text = text.toLowerCase();
+                }
+
+                while((index = text.indexOf(word, startIndex)) !== -1) {
+                  var hasMatch = false;
+                  // 索引位置相同的关键词，保留长度较长的
+                  titleHitSlice.forEach(function (hit) {
+                    if (hit.index === index && hit.word.length < word.length) {
+                      hit.word = word;
+                      hasMatch = true;
+                    }
+                  });
+                  startIndex = index + word.length;
+                  !hasMatch && result.push({ index: index, word: word, weight: weight });
+                }
+                return result;
+              }
+              titleHitSlice = titleHitSlice.concat(getIndexByword(keyword, titleLower, false, WEIGHT.title));
+              contentHitSlice = contentHitSlice.concat(getIndexByword(keyword, contentLower, false, WEIGHT.content));
+            });
+
+            var hitTitle = titleHitSlice.length;
+            var hitContent = contentHitSlice.length;
+
+            if (hitTitle > 0 || hitContent > 0) {
+              isMatch = true;
+            }
+            if (isMatch) {
+              ;[titleHitSlice, contentHitSlice].forEach(function (hit) {
+                // 按照匹配文字的索引的递增顺序排序
+                hit.sort(function (left, right) {
+                  return left.index - right.index;
+                });
+              });
+              /**
+              * 给文本中匹配到的关键词添加标记，从而进行高亮显示
+              * @param {String} text 原文本
+              * @param {Array} hitSlice 匹配项的索引信息
+              * @param {Number} start 开始索引
+              * @param {Number} end 结束索引
+              * @return {String}
+              */
+              function highlightKeyword (text, hitSlice, start, end) {
+                if (!text || !hitSlice || !hitSlice.length) {
+                  return;
+                }
+
+                var result = '';
+                var startIndex = start;
+                var endIndex = end;
+                hitSlice.forEach(function (hit) {
+                  if (hit.index < startIndex) {
+                    return;
+                  }
+
+                  var hitWordEnd = hit.index + hit.word.length;
+                  result += text.slice(startIndex, hit.index);
+                  result += '<b>' + text.slice(hit.index, hitWordEnd) + '</b>';
+                  startIndex = hitWordEnd;
+                });
+                result += text.slice(startIndex, endIndex);
+                return result;
+              }
+
+              var postData = {};
+              // 文章总的搜索权重
+              var postWeight = titleHitSlice.length * WEIGHT.title + contentHitSlice.length * WEIGHT.content;
+              // 标记匹配关键词后的标题
+              var postTitle = highlightKeyword(title, titleHitSlice, 0, title.length) || title;
+              // 标记匹配关键词后的内容
+              var postContent;
+              // 显示内容的长度
+              var SHOW_WORD_LENGTH = 200;
+              // 命中关键词前的字符显示长度
+              var SHOW_WORD_FRONT_LENGTH = 20;
+              var SHOW_WORD_END_LENGTH = SHOW_WORD_LENGTH - SHOW_WORD_FRONT_LENGTH;
+
+              // 截取匹配的第一个字符，前后共 200 个字符来显示
+              if (contentHitSlice.length > 0) {
+                var firstIndex = contentHitSlice[0].index;
+                var start = firstIndex > SHOW_WORD_FRONT_LENGTH ? firstIndex - SHOW_WORD_FRONT_LENGTH : 0;
+                var end = firstIndex + SHOW_WORD_END_LENGTH;
+                postContent = highlightKeyword(content, contentHitSlice, start, end);
+              } else { // 未匹配到内容，直接截取前 200 个字符来显示
+                postContent = content.slice(0, SHOW_WORD_LENGTH);
+              }
+              postData.title = postTitle;
+              postData.content = postContent;
+              postData.url = postURL;
+              postData.weight = postWeight;
+              matchPosts.push(postData);
+            }
+          });
+        }
+
+        var resultInnerHtml = '';
+        if (matchPosts.length) {
+          // 按权重递增的顺序排序，使权重大的优先显示
+          matchPosts.sort(function (left, right) {
+            return right.weight - left.weight;
+          });
+          resultInnerHtml += '<ul>';
+          matchPosts.forEach(function (post) {
+            resultInnerHtml += '<li><a class="search-results-title" href="' + post.url + '">';
+            resultInnerHtml += post.title;
+            resultInnerHtml += '</a><div class="search-results-content">';
+            resultInnerHtml += post.content;
+            resultInnerHtml += '</div></li>';
+          });
+          resultInnerHtml += '</ul>';
+        } else {
+          resultInnerHtml += '<div class="search-results-none"><i class="far fa-meh"></i></div>';
+        }
+        $result.html(resultInnerHtml);
+      };
+      $input.on('input', searchPost);
+      $input.on('keyup', function (e) {
+        if (e.keyCode === Stun.utils.codeToKeyCode('Enter')) {
+          searchPost();
+        }
+      });
+    }
+  });
+}
+
+function closeSearch () {
+  $('body').css({ overflow: 'auto' });
+  $('.search-popup').css({ display: 'none' });
+  $('.search-mask').css({ display: 'none' });
+}
+
+window.addEventListener('DOMContentLoaded', function () {
+  Stun.utils.pjaxReloadLocalSearch = function () {
+    $('.header-nav-search').on('click', function (e) {
+      e.stopPropagation();
+      $('body').css('overflow', 'hidden');
+      $('.search-popup')
+        .velocity('stop')
+        .velocity('transition.expandIn', {
+          duration: 300,
+          complete: function () {
+            $('.search-popup input').focus();
+          }
+        });
+      $('.search-mask')
+        .velocity('stop')
+        .velocity('transition.fadeIn', {
+          duration: 300
+        });
+
+      initSearch();
+    });
+    $('.search-mask, .search-close').on('click', function () {
+      closeSearch();
+    });
+    $(document).on('keydown', function (e) {
+      // Escape <=> 27
+      if (e.keyCode === Stun.utils.codeToKeyCode('Escape')) {
+        closeSearch();
+      }
+    });
+  };
+
+  Stun.utils.pjaxReloadLocalSearch();
+}, false);
+
+function safeOpenUrl(url) {
+  var newTab = window.open();
+  newTab.opener = null;
+  newTab.location = url;
+}
+
+function extSearch(engine) {
+  var engines = {
+    google: 'https://www.google.com/search?q=',
+    bing: 'https://cn.bing.com/search?q=',
+    baidu: 'https://www.baidu.com/s?ie=UTF-8&wd=',
+  };
+  var host = window.location.host;
+  var query = $('.search-input input').val().toLowerCase().trim();
+  var uri = engines[engine] + query + ' site:' + host;
+
+  if (query) {
+    safeOpenUrl(uri);
+  } else {
+    Stun.utils.popAlert('warning', '请输入字符');
+  }
+}
+
+var assistSearchList = window.CONFIG.assistSearch;
+
+if (Array.isArray(assistSearchList)) {
+  assistSearchList.forEach(function (name) {
+    document.querySelector('.search-btns-item--' + name).addEventListener('click', function () {
+      extSearch(name);
+    }, false);
+  });
+}</script><script src="https://cdn.jsdelivr.net/npm/pjax@latest/pjax.min.js"></script><script>window.addEventListener('DOMContentLoaded', function () {
+  var pjax = new Pjax({"selectors":["head title","#main",".pjax-reload"],"history":true,"scrollTo":false,"scrollRestoration":false,"cacheBust":false,"debug":false,"currentUrlFullReload":false,"timeout":0});
+  // 加载进度条的计时器
+  var loadingTimer = null;
+
+  // 重置页面 Y 方向上的滚动偏移量
+  document.addEventListener('pjax:send', function () {
+    $('.header-nav-menu').removeClass('show');
+    if (CONFIG.pjax && CONFIG.pjax.avoidBanner) {
+      $('html').velocity('scroll', {
+        duration: 500,
+        offset: $('#header').height(),
+        easing: 'easeInOutCubic'
+      });
+    }
+
+    var loadingBarWidth = 20;
+    var MAX_LOADING_WIDTH = 95;
+
+    $('.loading-bar').addClass('loading');
+    $('.loading-bar__progress').css('width', loadingBarWidth + '%');
+    clearInterval(loadingTimer);
+    loadingTimer = setInterval(function () {
+      loadingBarWidth += 3;
+      if (loadingBarWidth > MAX_LOADING_WIDTH) {
+        loadingBarWidth = MAX_LOADING_WIDTH;
+      }
+      $('.loading-bar__progress').css('width', loadingBarWidth + '%');
+    }, 500);
+  }, false);
+
+  window.addEventListener('pjax:complete', function () {
+    clearInterval(loadingTimer);
+    $('.loading-bar__progress').css('width', '100%');
+    $('.loading-bar').removeClass('loading');
+    setTimeout(function () {
+      $('.loading-bar__progress').css('width', '0');
+    }, 400);
+    $('link[rel=prefetch], script[data-pjax-rm]').each(function () {
+      $(this).remove();
+    });
+    $('script[data-pjax], #pjax-reload script').each(function () {
+      $(this).parent().append($(this).remove());
+    });
+
+    if (Stun.utils.pjaxReloadBoot) {
+      Stun.utils.pjaxReloadBoot();
+    }
+    if (Stun.utils.pjaxReloadScroll) {
+      Stun.utils.pjaxReloadScroll();
+    }
+    if (Stun.utils.pjaxReloadSidebar) {
+      Stun.utils.pjaxReloadSidebar();
+    }
+    if (false) {
+      if (Stun.utils.pjaxReloadHeader) {
+        Stun.utils.pjaxReloadHeader();
+      }
+      if (Stun.utils.pjaxReloadScrollIcon) {
+        Stun.utils.pjaxReloadScrollIcon();
+      }
+      if (Stun.utils.pjaxReloadLocalSearch) {
+        Stun.utils.pjaxReloadLocalSearch();
+      }
+    }
+  }, false);
+}, false);</script><div id="pjax-reload"><link href="https://cdn.jsdelivr.net/npm/katex@0.10.2/dist/katex.min.css" rel="stylesheet" type="text/css"><link href="https://cdn.jsdelivr.net/npm/katex@0.10.2/dist/contrib/copy-tex.css" rel="stylesheet" type="text/css"><script src="https://cdn.jsdelivr.net/npm/katex@0.10.2/dist/contrib/copy-tex.min.js"></script><script src="https://cdn.jsdelivr.net/npm/quicklink@1.0.1/dist/quicklink.umd.js"></script><script>function initQuicklink() {
+  quicklink({
+    timeout: '10000',
+    priority: true,
+    ignores: [uri => uri.includes('#'), uri => uri === 'https://www.fanschou.com/2021/07/10/algorithm-sort-bubble/', /\/api\/?/,uri => uri.includes('.xml'),uri => uri.includes('.zip'),(uri, el) => el.hasAttribute('nofollow'),(uri, el) => el.hasAttribute('noprefetch')]
+  });
+}
+
+if (true || false) {
+  initQuicklink();
+} else {
+  window.addEventListener('DOMContentLoaded', initQuicklink, false);
+}</script><script src="//cdn.jsdelivr.net/gh/sukkaw/busuanzi@latest/bsz.pure.mini.js" async></script></div><script src="/js/utils.js?v=2.6.2"></script><script src="/js/stun-boot.js?v=2.6.2"></script><script src="/js/scroll.js?v=2.6.2"></script><script src="/js/header.js?v=2.6.2"></script><script src="/js/sidebar.js?v=2.6.2"></script><script type="application/json" src="/search.json"></script></body></html>
