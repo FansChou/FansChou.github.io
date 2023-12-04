@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /archives/
+Disallow: /categories/
+Allow: /tags/
+Disallow: /author/
+
+Sitemap: https://www.fanschou.com/sitemap.xml

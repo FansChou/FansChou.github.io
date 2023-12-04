@@ -1,0 +1,261 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>排序算法系列之开篇 | 六脉神间</title><meta name="author" content="Fan Zhou"><meta name="copyright" content="Fan Zhou"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="本篇文章作为排序算法系列的开篇，主要做一个开篇明义的讲解，介绍了一些关于排序算法的基本术语，有一些概念也是学习任何算法都有益处的知识。同时有了这一篇文章的介绍，后续排序算法系列文章的展开也可以基于此省去一些常用知识的说明。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="排序算法系列之开篇">
+<meta property="og:url" content="https://www.fanschou.com/algorithm/algorithm-sort-opening/index.html">
+<meta property="og:site_name" content="六脉神间">
+<meta property="og:description" content="本篇文章作为排序算法系列的开篇，主要做一个开篇明义的讲解，介绍了一些关于排序算法的基本术语，有一些概念也是学习任何算法都有益处的知识。同时有了这一篇文章的介绍，后续排序算法系列文章的展开也可以基于此省去一些常用知识的说明。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://images.fanschou.com/blog/site/article_cover/algorithm-sort-opening.png">
+<meta property="article:published_time" content="2021-07-03T06:36:11.000Z">
+<meta property="article:modified_time" content="2021-07-03T06:36:11.000Z">
+<meta property="article:author" content="Fan Zhou">
+<meta property="article:tag" content="algorithm">
+<meta property="article:tag" content="sort">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://images.fanschou.com/blog/site/article_cover/algorithm-sort-opening.png"><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://www.fanschou.com/algorithm/algorithm-sort-opening/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//www.google-analytics.com" crossorigin=""/><link rel="preconnect" href="//hm.baidu.com"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><meta name="google-site-verification" content="86RF8GW5IDTb4MsudpmvlyoCF4LNy8PKIUmaO4XAYzo"/><meta name="baidu-site-verification" content="code-ghVfCKUSid"/><meta name="msvalidate.01" content="F4212502904AF5E036E6798B8FD47AC5"/><meta name="360-site-verification" content="4d866e5e79eaddc2f382d27f6d2dc108"/><meta name="sogou_site_verification" content="Zq1e6uOwIX"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?1e25ae116836a724d59f9f36facf49f5";
+  var s = document.getElementsByTagName("script")[0]; 
+  s.parentNode.insertBefore(hm, s);
+})();
+</script><script async="async" src="https://www.googletagmanager.com/gtag/js?id=UA-128986441-1"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'UA-128986441-1');
+</script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.json","preload":true,"top_n_per_article":1,"unescape":false,"languages":{"hits_empty":"找不到您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  noticeOutdate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":200},
+  copy: {
+    success: '复制成功',
+    error: '复制错误',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '天',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":50,"languages":{"author":"作者: Fan Zhou","link":"链接: ","source":"来源: 六脉神间","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'fancybox',
+  Snackbar: {"chs_to_cht":"你已切换为繁体中文","cht_to_chs":"你已切换为简体中文","day_to_night":"你已切换为深色模式","night_to_day":"你已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#121212","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyload: false,
+  isAnchor: true,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '排序算法系列之开篇',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: false,
+  isToc: true,
+  postUpdate: '2021-07-03 14:36:11'
+}</script><script>(win=>{
+      win.saveToLocal = {
+        set: (key, value, ttl) => {
+          if (ttl === 0) return
+          const now = Date.now()
+          const expiry = now + ttl * 86400000
+          const item = {
+            value,
+            expiry
+          }
+          localStorage.setItem(key, JSON.stringify(item))
+        },
+      
+        get: key => {
+          const itemStr = localStorage.getItem(key)
+      
+          if (!itemStr) {
+            return undefined
+          }
+          const item = JSON.parse(itemStr)
+          const now = Date.now()
+      
+          if (now > item.expiry) {
+            localStorage.removeItem(key)
+            return undefined
+          }
+          return item.value
+        }
+      }
+    
+      win.getScript = (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        script.onerror = reject
+        script.onload = script.onreadystatechange = function() {
+          const loadState = this.readyState
+          if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+          script.onload = script.onreadystatechange = null
+          resolve()
+        }
+
+        Object.keys(attr).forEach(key => {
+          script.setAttribute(key, attr[key])
+        })
+
+        document.head.appendChild(script)
+      })
+    
+      win.getCSS = (url, id = false) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onerror = reject
+        link.onload = link.onreadystatechange = function() {
+          const loadState = this.readyState
+          if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+          link.onload = link.onreadystatechange = null
+          resolve()
+        }
+        document.head.appendChild(link)
+      })
+    
+      win.activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      win.activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+      const t = saveToLocal.get('theme')
+    
+        if (t === 'dark') activateDarkMode()
+        else if (t === 'light') activateLightMode()
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        if (asideStatus === 'hide') {
+          document.documentElement.classList.add('hide-aside')
+        } else {
+          document.documentElement.classList.remove('hide-aside')
+        }
+      }
+    
+      const detectApple = () => {
+        if(/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)){
+          document.documentElement.classList.add('apple')
+        }
+      }
+      detectApple()
+    })(window)</script><meta name="generator" content="Hexo 7.0.0"><link rel="alternate" href="/atom.xml" title="六脉神间" type="application/atom+xml">
+</head><body><script>window.paceOptions = {
+  restartOnPushState: false
+}
+
+document.addEventListener('pjax:send', () => {
+  Pace.restart()
+})
+</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pace-js/themes/blue/pace-theme-minimal.min.css"/><script src="https://cdn.jsdelivr.net/npm/pace-js/pace.min.js"></script><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img is-center"><img src="https://images.fanschou.com/blog/site/avatar.jpg" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="sidebar-site-data site-data is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">13</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">13</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><hr class="custom-hr"/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page group" href="javascript:void(0);"><i class="fa-fw fas fa-user"></i><span> 关于</span><i class="fas fa-chevron-down"></i></a><ul class="menus_item_child"><li><a class="site-page child" href="/author/"><i class="fa-fw fas fa-book-open"></i><span> 作者</span></a></li><li><a class="site-page child" href="/friends/"><i class="fa-fw fas fa-user-friends"></i><span> 友情链接</span></a></li></ul></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('https://images.fanschou.com/blog/site/article_cover/algorithm-sort-opening.png')"><nav id="nav"><span id="blog-info"><a href="/" title="六脉神间"><span class="site-name">六脉神间</span></a></span><div id="menus"><div id="search-button"><a class="site-page social-icon search" href="javascript:void(0);"><i class="fas fa-search fa-fw"></i><span> 搜索</span></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page group" href="javascript:void(0);"><i class="fa-fw fas fa-user"></i><span> 关于</span><i class="fas fa-chevron-down"></i></a><ul class="menus_item_child"><li><a class="site-page child" href="/author/"><i class="fa-fw fas fa-book-open"></i><span> 作者</span></a></li><li><a class="site-page child" href="/friends/"><i class="fa-fw fas fa-user-friends"></i><span> 友情链接</span></a></li></ul></div></div><div id="toggle-menu"><a class="site-page" href="javascript:void(0);"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="post-info"><h1 class="post-title">排序算法系列之开篇</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2021-07-03T06:36:11.000Z" title="发表于 2021-07-03 14:36:11">2021-07-03</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2021-07-03T06:36:11.000Z" title="更新于 2021-07-03 14:36:11">2021-07-03</time></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">1.5k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>4分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="排序算法系列之开篇"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><h2 id="引言">引言</h2>
+<p>对数据排序可以说是我们编码过程中最常碰到的一种操作了，为此出现了很多不同的排序算法，各有各的特点。从本篇文章开始，会陆续介绍一些常用的排序算法。在开始整个系列之前，我希望先通过这个开篇，介绍一些关于排序算法的一些基本概念，方便读者阅读接下来的文章。</p>
+<p>为了方便大家理解，我会尽量制作一些动图演示，每篇文章也会给出代码的实现，如有错漏，望各位读者可以给予指正。</p>
+<h2 id="基本术语">基本术语</h2>
+<h3 id="复杂度">复杂度</h3>
+<p>一般对于算法的复杂度，我们都会从时间复杂度和空间复杂度两个角度去衡量，然而有时候，时间和空间是不可兼得的，我们需要针对具体的情境，在两者之间取得一种平衡。</p>
+<p>在摩尔定律的加持之下，现代计算机硬件性能得到了极大提升，所以在一般情况下，我们会选择空间换时间的做法，来提高算法的运行效率，如果没有明确提及是哪种复杂度，一般都会默认是时间复杂度。</p>
+<h4 id="时间复杂度">时间复杂度</h4>
+<p>时间复杂度用来表示一个算法执行所消耗的时间。那么算法的执行时间如何衡量呢？最简单的办法就是将算法程序跑一遍得到它的运行时间，但是这样会有很多弊端，首先这种方式非常容易受运行环境的影响，机器性能和数据规模的不同都会造成影响，并且，很多时候仅仅只是提出了算法思路，真正的代码还没有实现，此时如何衡量时间复杂度呢？</p>
+<p>因此，我们采用了一种更通用的表示方式：<strong>「 大O符号表示法 」</strong>，即 <code>T(n) = O(f(n))</code> ，也就是在 n 的规模下，算法的时间复杂度为 O(f(n)) 。</p>
+<p>举一个简单的例子：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span>(i = <span class="number">1</span>; i &lt;= n; i++)</span><br><span class="line">&#123;</span><br><span class="line">   j = i;</span><br><span class="line">   j++;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>通过 <strong>「大O符号表示法」</strong> ，这段代码的时间复杂度为：O(n)，为什么是 O(n) 呢？</p>
+<p>我们可以看到这是一个循环，循环次数是 n ，当 n 的数量加大时，相应的，程序的执行时间也会增长，那么我们可以认为，这段代码的时间复杂度是随着循环次数的增加，而呈现出一种线性增长的态势。到这里我们看出 <strong>「 大O符号表示法 」</strong> 不是一种精确表示复杂度的计算方式，这里的 <strong>O</strong> 其实表示的是复杂度与某个基数公式的正比例关系，这个基数公式其实表达的是一种近似的数量级。</p>
+<p>常见的时间复杂度量级有：</p>
+<ul>
+<li>常数阶O(1)</li>
+<li>对数阶O(logN)</li>
+<li>线性阶O(n)</li>
+<li>线性对数阶O(nlogN)</li>
+<li>平方阶O(n²)</li>
+<li>立方阶O(n³)</li>
+<li>K次方阶O(n^k)</li>
+<li>指数阶(2^n)</li>
+</ul>
+<p>上面从上至下依次的时间复杂度越来越大，执行的效率越来越低。</p>
+<p>对于时间复杂度来说，一般比较关注平均时间复杂度和最差时间复杂度，一个表示一般情况下的时间复杂度，一个是表示极端情况下最慢的情况。</p>
+<h4 id="空间复杂度">空间复杂度</h4>
+<p>既然时间复杂度不是用来计算程序具体耗时的，那么同理我们也应该知道，空间复杂度也不是用来直接计算程序<strong>实际占用</strong>的空间的。</p>
+<p>空间复杂度是对一个算法在运行过程中临时使用存储空间大小的一个量度，同样反映的是一个趋势。</p>
+<p>我们来看一个交换变量的例子：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="title function_">swap</span><span class="params">(<span class="type">int</span> a, <span class="type">int</span> b)</span>&#123;</span><br><span class="line">    <span class="type">int</span> <span class="variable">temp</span> <span class="operator">=</span> a;</span><br><span class="line">    a = b;</span><br><span class="line">    b = temp;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上面的代码将两个变量的值进行了交换，用到了一个新的变量 <code>temp</code> ，无论这个方法怎么被调用，始终也只会使用这一个变量的空间，那么它的空间复杂度就是O(1)，也就是常数级别的复杂度。</p>
+<h3 id="排序的稳定性">排序的稳定性</h3>
+<h4 id="稳定排序">稳定排序</h4>
+<p>假设给定一个无序的列表，如果 a 原本在 b 的前面，且 a == b，排序之后 a 仍然在 b 的前面，我们称这种排序方式是一个稳定排序。<strong>「 稳定 」</strong> 指代的是元素相对顺序没有改变。</p>
+<h4 id="不稳定排序">不稳定排序</h4>
+<p>对比稳定排序，如果 a 原本在 b 的前面，且 a == b，排序之后 a 可能不在 b 的前面，我们称这种排序方式是一个不稳定排序。</p>
+<h3 id="排序使用的空间">排序使用的空间</h3>
+<p>从排序是否使用额外的空间，我们也可以分为两种。</p>
+<h4 id="原地排序">原地排序</h4>
+<p>原地排序就是指在排序过程中不申请多余的存储空间，只利用原来存储待排数据的存储空间进行比较和交换的排序方式。</p>
+<h4 id="非原地排序">非原地排序</h4>
+<p>对比原地排序，非原地排序则需要利用额外的数组来辅助排序。</p>
+<h3 id="排序使用的空间位置">排序使用的空间位置</h3>
+<p>从排序使用的空间来源，也可以分成两类</p>
+<h4 id="内部排序">内部排序</h4>
+<p>排序数据全部记录在内存中进行排序，这种属于内部排序。</p>
+<h4 id="外部排序">外部排序</h4>
+<p>如果因为排序的数据很大，内存空间一次不能容纳全部的排序记录，在排序过程中需要访问外存，这种就属于外部排序。</p>
+<h2 id="排序类别">排序类别</h2>
+<ul>
+<li>比较排序
+<ul>
+<li><a href="https://www.fanschou.com/algorithm/algorithm-sort-bubble/">冒泡排序</a></li>
+<li>选择排序（Selection Sort）</li>
+<li><a href="https://www.fanschou.com/algorithm/algorithm-insertion-sort/">插入排序</a></li>
+<li>希尔排序（Shell Sort）</li>
+<li>归并排序（Merge Sort）</li>
+<li>快速排序（Quick Sort）</li>
+</ul>
+</li>
+<li>桶排序（Bucket Sort）</li>
+<li>计数排序（Counting Sort）</li>
+<li>基数排序（Radix Sort）</li>
+<li>堆排序（Heap Sort）</li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://www.fanschou.com">Fan Zhou</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://www.fanschou.com/algorithm/algorithm-sort-opening/">https://www.fanschou.com/algorithm/algorithm-sort-opening/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来自 <a href="https://www.fanschou.com" target="_blank">六脉神间</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/algorithm/">algorithm</a><a class="post-meta__tags" href="/tags/sort/">sort</a></div><div class="post_share"><div class="social-share" data-image="https://images.fanschou.com/blog/site/article_cover/algorithm-sort-opening.png" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="prev-post pull-left"><a href="/algorithm/algorithm-string-search-kmp/" title="浅谈KMP算法"><img class="cover" src="https://images.fanschou.com/blog/site/article_cover/algorithm-string-search-kmp.png" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="pagination-info"><div class="label">上一篇</div><div class="prev_info">浅谈KMP算法</div></div></a></div><div class="next-post pull-right"><a href="/algorithm/algorithm-sort-bubble/" title="排序算法系列之冒泡排序"><img class="cover" src="https://images.fanschou.com/blog/site/article_cover/algorithm-sort-bubble.png" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">下一篇</div><div class="next_info">排序算法系列之冒泡排序</div></div></a></div></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><div><a href="/algorithm/algorithm-insertion-sort/" title="排序算法系列之插入排序"><img class="cover" src="https://images.fanschou.com/blog/site/article_cover/algorithm-insertion-sort.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-05-18</div><div class="title">排序算法系列之插入排序</div></div></a></div><div><a href="/algorithm/algorithm-sort-bubble/" title="排序算法系列之冒泡排序"><img class="cover" src="https://images.fanschou.com/blog/site/article_cover/algorithm-sort-bubble.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2021-07-10</div><div class="title">排序算法系列之冒泡排序</div></div></a></div><div><a href="/algorithm/algorithm-reservoir-sampling/" title="蓄水池抽样算法——解决以相同概率抽取样本的问题"><img class="cover" src="https://images.fanschou.com/blog/site/article_cover/algorithm-reservoir-sampling.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-05-12</div><div class="title">蓄水池抽样算法——解决以相同概率抽取样本的问题</div></div></a></div><div><a href="/algorithm/algorithm-string-search-kmp/" title="浅谈KMP算法"><img class="cover" src="https://images.fanschou.com/blog/site/article_cover/algorithm-string-search-kmp.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2021-05-29</div><div class="title">浅谈KMP算法</div></div></a></div><div><a href="/algorithm/partial-sum-by-bytedance-interview/" title="从一道字节算法面试题聊聊前缀和的运用"><img class="cover" src="https://images.fanschou.com/blog/site/article_cover/partial-sum-by-bytedance-interview.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-28</div><div class="title">从一道字节算法面试题聊聊前缀和的运用</div></div></a></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="is-center"><div class="avatar-img"><img src="https://images.fanschou.com/blog/site/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info__name">Fan Zhou</div><div class="author-info__description">一个兢兢业业码农的个人博客，记录着学习笔记和生活中的思考，期待着和所有人相遇</div></div><div class="card-info-data site-data is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">13</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">13</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/FansChou"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons is-center"><a class="social-icon" href="https://github.com/FansChou" target="_blank" title="Github"><i class="fab fa-github"></i></a><a class="social-icon" href="https://www.zhihu.com/people/ZHeroFan" target="_blank" title="zhihu"><i class="fab fa-zhihu"></i></a></div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-number">1.</span> <span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E6%9C%AF%E8%AF%AD"><span class="toc-number">2.</span> <span class="toc-text">基本术语</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%8D%E6%9D%82%E5%BA%A6"><span class="toc-number">2.1.</span> <span class="toc-text">复杂度</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%97%B6%E9%97%B4%E5%A4%8D%E6%9D%82%E5%BA%A6"><span class="toc-number">2.1.1.</span> <span class="toc-text">时间复杂度</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%A9%BA%E9%97%B4%E5%A4%8D%E6%9D%82%E5%BA%A6"><span class="toc-number">2.1.2.</span> <span class="toc-text">空间复杂度</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%92%E5%BA%8F%E7%9A%84%E7%A8%B3%E5%AE%9A%E6%80%A7"><span class="toc-number">2.2.</span> <span class="toc-text">排序的稳定性</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%A8%B3%E5%AE%9A%E6%8E%92%E5%BA%8F"><span class="toc-number">2.2.1.</span> <span class="toc-text">稳定排序</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%8D%E7%A8%B3%E5%AE%9A%E6%8E%92%E5%BA%8F"><span class="toc-number">2.2.2.</span> <span class="toc-text">不稳定排序</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%92%E5%BA%8F%E4%BD%BF%E7%94%A8%E7%9A%84%E7%A9%BA%E9%97%B4"><span class="toc-number">2.3.</span> <span class="toc-text">排序使用的空间</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%8E%9F%E5%9C%B0%E6%8E%92%E5%BA%8F"><span class="toc-number">2.3.1.</span> <span class="toc-text">原地排序</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E9%9D%9E%E5%8E%9F%E5%9C%B0%E6%8E%92%E5%BA%8F"><span class="toc-number">2.3.2.</span> <span class="toc-text">非原地排序</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%92%E5%BA%8F%E4%BD%BF%E7%94%A8%E7%9A%84%E7%A9%BA%E9%97%B4%E4%BD%8D%E7%BD%AE"><span class="toc-number">2.4.</span> <span class="toc-text">排序使用的空间位置</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%86%85%E9%83%A8%E6%8E%92%E5%BA%8F"><span class="toc-number">2.4.1.</span> <span class="toc-text">内部排序</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%A4%96%E9%83%A8%E6%8E%92%E5%BA%8F"><span class="toc-number">2.4.2.</span> <span class="toc-text">外部排序</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%92%E5%BA%8F%E7%B1%BB%E5%88%AB"><span class="toc-number">3.</span> <span class="toc-text">排序类别</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/redis/redis-sliding-window/" title="用Redis滑动窗口解决CPU100%的问题"><img src="https://images.fanschou.com/blog/site/article_cover/redis-sliding-window.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="用Redis滑动窗口解决CPU100%的问题"/></a><div class="content"><a class="title" href="/redis/redis-sliding-window/" title="用Redis滑动窗口解决CPU100%的问题">用Redis滑动窗口解决CPU100%的问题</a><time datetime="2022-09-22T05:14:52.000Z" title="发表于 2022-09-22 13:14:52">2022-09-22</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/devops/apply-for-TLS-certificate-using-acme/" title="使用acme申请TLS证书"><img src="https://images.fanschou.com/blog/site/article_cover/apply-for-TLS-certificate-using-acme.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="使用acme申请TLS证书"/></a><div class="content"><a class="title" href="/devops/apply-for-TLS-certificate-using-acme/" title="使用acme申请TLS证书">使用acme申请TLS证书</a><time datetime="2022-09-06T05:14:52.000Z" title="发表于 2022-09-06 13:14:52">2022-09-06</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/env/tutorial-of-launchd-in-macos/" title="macOS下Launchd的介绍和使用"><img src="https://images.fanschou.com/blog/site/article_cover/tutorial-of-launchd-in-macos.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="macOS下Launchd的介绍和使用"/></a><div class="content"><a class="title" href="/env/tutorial-of-launchd-in-macos/" title="macOS下Launchd的介绍和使用">macOS下Launchd的介绍和使用</a><time datetime="2022-08-19T05:14:52.000Z" title="发表于 2022-08-19 13:14:52">2022-08-19</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/algorithm/algorithm-insertion-sort/" title="排序算法系列之插入排序"><img src="https://images.fanschou.com/blog/site/article_cover/algorithm-insertion-sort.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="排序算法系列之插入排序"/></a><div class="content"><a class="title" href="/algorithm/algorithm-insertion-sort/" title="排序算法系列之插入排序">排序算法系列之插入排序</a><time datetime="2022-05-18T05:14:52.000Z" title="发表于 2022-05-18 13:14:52">2022-05-18</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/algorithm/algorithm-reservoir-sampling/" title="蓄水池抽样算法——解决以相同概率抽取样本的问题"><img src="https://images.fanschou.com/blog/site/article_cover/algorithm-reservoir-sampling.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="蓄水池抽样算法——解决以相同概率抽取样本的问题"/></a><div class="content"><a class="title" href="/algorithm/algorithm-reservoir-sampling/" title="蓄水池抽样算法——解决以相同概率抽取样本的问题">蓄水池抽样算法——解决以相同概率抽取样本的问题</a><time datetime="2022-05-12T05:14:52.000Z" title="发表于 2022-05-12 13:14:52">2022-05-12</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url('https://images.fanschou.com/blog/site/article_cover/algorithm-sort-opening.png')"><div id="footer-wrap"><div class="copyright">&copy;2018 - 2023 By Fan Zhou</div><div class="footer_custom_text"><a target="_blank" href="https://beian.miit.gov.cn/" style="display:inline-block;text-decoration:none;height:20px;line-height:20px;"><p style="float:left;height:20px;line-height:20px;margin:0px 0px 0px 2px; color:#939393;">皖ICP备2021007904号</p></a><br /><a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490" style="display:inline-block;text-decoration:none;height:20px;line-height:20px;"><img src="https://images.fanschou.com/blog/site/beian_gongan.png" alt="备案" style="float:left;"/><p style="float:left;height:20px;line-height:20px;margin:0px 0px 0px 2px; color:#939393;">皖公网安备 34180202000490号</p></a></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"></div><div id="rightside-config-show"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="浅色和深色模式转换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.js"></script><script>function panguFn () {
+  if (typeof pangu === 'object') pangu.autoSpacingPage()
+  else {
+    getScript('https://cdn.jsdelivr.net/npm/pangu/dist/browser/pangu.min.js')
+      .then(() => {
+        pangu.autoSpacingPage()
+      })
+  }
+}
+
+function panguInit () {
+  if (false){
+    GLOBAL_CONFIG_SITE.isPost && panguFn()
+  } else {
+    panguFn()
+  }
+}
+
+document.addEventListener('DOMContentLoaded', panguInit)</script><div class="js-pjax"></div><script defer="defer" id="ribbon" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/canvas-ribbon.min.js" size="150" alpha="0.6" zIndex="-1" mobile="false" data-click="true"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><span id="loading-status"></span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="is-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据库加载中</span></div><div class="search-wrap"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div><hr/><div id="local-search-results"></div><div id="local-search-stats-wrap"></div></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></div></body></html>
