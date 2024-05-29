@@ -1,0 +1,110 @@
+<!DOCTYPE html><html lang="en"> <head><meta name="viewport" content="width=device-width"><meta name="generator" content="Astro v4.9.2"><link rel="sitemap" href="/sitemap-index.xml"><title>kafka安装配置</title><meta charset="utf-8"><link rel="canonical" href="https://www.fanschou.com/posts/install/kafka-install-steps/"><meta name="description" content="本文是记录自己在学习 kafka 时第一次进行开发环境搭建时踩过的一些坑，写成一个安装教程，方便以后再次搭建开发环境的时候进行查看，安装教程主要以 Windows 系统进行演示，但 Linux 下大体相同。"><meta name="robots" content="index, follow"><meta property="og:title" content="kafka安装配置"><meta property="og:type" content="article"><meta property="og:image" content="https://www.fanschou.com/placeholder.png"><meta property="og:url" content="https://www.fanschou.com"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta name="twitter:image:src" content="https://www.fanschou.com/placeholder.png"><meta name="twitter:image:alt" content="本文是记录自己在学习 kafka 时第一次进行开发环境搭建时踩过的一些坑，写成一个安装教程，方便以后再次搭建开发环境的时候进行查看，安装教程主要以 Windows 系统进行演示，但 Linux 下大体相同。"><meta name="twitter:creator"><meta name="twitter:site"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="kafka安装配置"><meta name="twitter:description" content="本文是记录自己在学习 kafka 时第一次进行开发环境搭建时踩过的一些坑，写成一个安装教程，方便以后再次搭建开发环境的时候进行查看，安装教程主要以 Windows 系统进行演示，但 Linux 下大体相同。"><!-- Katex --><link rel="stylesheet" href="/_astro/about.CKOrui31.css">
+<link rel="stylesheet" href="/_astro/about.Q2hPb40S.css">
+<style>.tk-meta-input{background-color:#fff}.code-container{position:relative}.clipboard-copy{position:absolute;top:.5rem;right:.5rem;width:1.75rem;height:1.75rem;display:flex;justify-content:center;align-items:center;border-radius:.25rem}.clipboard-copy:hover{background-color:#30363d}
+</style><script type="module" src="/_astro/hoisted.C1FqLlVV.js"></script>
+<script type="module" src="/_astro/page.DFwqf4PB.js"></script></head> <body> <div un-max-lg="animate-fadein-down" un-lg="flex flex-row-reverse justify-between gap-4 px-8 mx-auto max-w-6xl" class="container contain-layout m-a"> <div un-lg="sticky top-0 h-screen py-20 animate-fadein-left gap-8" un-lg:flex="~ col justify-between items-start gap-4" class="p-7.5"> <header un-lg="grow-1 justify-between items-start" un-flex="~ col gap-2.5" class="text-center"> <hgroup un-hover:lg="bg-foreground color-background pt-3.75 pb-8.75 " un-lg=" write-vertical-right items-start px-2.5 pb-12 b-l-2px b-l-foreground-solid text-left" un-flex="~ col gap-2.5" class="cursor-pointer transition-[padding,background] duration-800 ease-in-out"> <a class="normal" href="/"> <h3 class="text-5 font-extrabold font-serif">Fan Zhou</h3> <h1 class="text-8 font-extrabold font-serif">六脉神间</h1> </a> </hgroup> <nav class="text-center font-bold" un-flex="~ col gap-2"> <ul un-lg="flex-col items-start text-4" class="text-3.5" un-flex="~ row gap-2 justify-center"> <li> <a href="/posts/page/1">文章</a> </li><li> <a href="/archive">归档</a> </li><li> <a href="/tags">标签</a> </li><li> <a href="/about">关于</a> </li> </ul> <ul un-flex="~ row gap-1 justify-center"> <li> <a href="https://github.com/FansChou" target="_blank" title="github" class="icon i-mdi-github"></a> </li><li> <a href="/rss.xml" target="_blank" title="rss" class="icon i-mdi-rss"></a> </li> </ul> </nav> </header> <footer font-bold text-3 un-flex="~ col gap-1" un-lg="gap-3.5" class="max-lg:hidden"> <p>
+© 2024 <a target="_blank" href="https://www.fanschou.com" rel="noopener noreferrer">Fan Zhou</a> </p> <p> <a target="_blank" href="https://beian.miit.gov.cn/">皖ICP备2021007904号</a> </p> <p> <a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490"> <img src="https://images.fanschou.com/blog/site/beian_gongan.webp" alt="备案" style="float:left;">皖公网安备 34180202000490号
+</a> </p> <!-- <p>
+    Theme
+    <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography" rel="noopener noreferrer">Typography</a>
+      by <a target="_blank" href="https://moeyua.com" rel="noopener noreferrer">Moeyua</a>
+  </p>
+  <p>
+    Proudly published with
+    <a target="_blank" href="https://astro.build" rel="noopener noreferrer">Astro</a>
+  </p> --> </footer> </div> <main un-lg="py-20 min-w-xl animate-fadein-down" class="p-7.5">  <article class="heti"> <header> <h1 class="post-title!"> <a href="/posts/install/kafka-install-steps/">kafka安装配置</a> </h1> <div class="mt-2 text-3.5"> <span>发布于</span> <time>2018-09-25</time> <span>更新于</span><time>2020-05-11</time> <a class="ml-2.5" href="/tags/install">
+# 安装与搭建 </a><a class="ml-2.5" href="/tags/kafka">
+# Kafka </a>  </div> </header>  <h2 id="准备工作">准备工作</h2>
+<ul>
+<li>安装资料下载
+<ul>
+<li>kafka安装包，来自<a href="http://kafka.apache.org/downloads">kafka官方下载</a>，可以自行选择版本
+<img src="https://images.fanschou.com/blog/kafka-install-steps/20180424_01_001.webp" alt="kafka官方下载"></li>
+</ul>
+</li>
+</ul>
+<h2 id="开始安装">开始安装</h2>
+<p>以下安装是在Windows系统下执行，Linux系统类似的做调整即可</p>
+<h3 id="配置修改">配置修改</h3>
+<ul>
+<li>解压缩下载的安装包到本地，开始修改配置
+<ul>
+<li><code>server.properties</code>在根目录的config文件夹下
+log.dirs=修改为你所使用系统的路径
+例如Windows下：D:/Dependency/kafka_2.12-1.1.0/logs/kafka-logs</li>
+<li><code>zookeeper.properties</code>在根目录的config文件夹下
+dataDir=修改为你所使用系统的路径
+例如Windows下：D:/Dependency/kafka_2.12-1.1.0/logs/zookeeper-logs</li>
+</ul>
+</li>
+<li>以上修改的两个文件主要是可能会引起启动问题的配置，至于端口等设置可随意调整，此处选择默认端口号即可</li>
+</ul>
+<h3 id="启动文件修改">启动文件修改</h3>
+<ul>
+<li>在根目录下找到bin/windows文件夹，用文本编辑器修改<code>kafka-run-class.bat</code>文件
+<img src="https://images.fanschou.com/blog/kafka-install-steps/20180424_01_002.webp" alt="kafka-run-class">
+我从官网下载的是编译好的安装包，在这个文件里留有一些问题，由于安装包已经编译好，其实上面对文件夹很多的扫描是没有必要的，我在安装之后的启动过程中报了一下找不到主类的错误，琢磨了很久，将上面对一些无效文件夹的扫描全部删除掉，遂解决了报错的问题。但我不能完全确定是否是因为这个导致报错，如果有出现类似的错误，可以试着操作一下。
+另外一个问题就是，Windows下的环境变量配置的时候，有些目录是带有空格的，这个也会导致报错，典型的就是如果JDK安装在C盘的Program Files下时的JAVA_HOME配置
+<img src="https://images.fanschou.com/blog/kafka-install-steps/20180424_01_003.webp" alt="kafka-run-class">
+这里将%CLASSPATH%外面加上双引号，用来解决这种情况</li>
+<li>这里再多说一句，早前的kafka版本需要额外下载一个zookeeper，用来运行kafka，现在新的版本已经自带了一个zookeeper的server，直接启动即可。后面在启动服务时也会提到。
+到这里，配置的问题基本解决了，下面开始启动服务</li>
+</ul>
+<h3 id="启动服务">启动服务</h3>
+<p>此处仍以Windows下的操作为例，Linux下所不同的是执行shell脚本而非批处理文件。</p>
+<p>首先进入到你解压的kafka根目录</p>
+<ol>
+<li>
+<p>启动zookeeper</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="shell"><code><span class="line"><span style="color:#61AFEF">./bin/windows/zookeeper-server-start.bat</span><span style="color:#98C379"> ./config/zookeeper.properties</span></span>
+<span class="line"></span></code></pre>
+</li>
+<li>
+<p>启动kafka</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="shell"><code><span class="line"><span style="color:#61AFEF">./bin/windows/kafka-server-start.bat</span><span style="color:#98C379"> ./config/server.properties</span></span>
+<span class="line"></span></code></pre>
+</li>
+<li>
+<p>创建topic，这里命名为test</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="shell"><code><span class="line"><span style="color:#61AFEF">./bin/windows/kafka-topics.bat</span><span style="color:#D19A66"> --create</span><span style="color:#D19A66"> --zookeeper</span><span style="color:#98C379"> localhost:2181</span><span style="color:#D19A66"> --replication-factor</span><span style="color:#D19A66"> 1</span><span style="color:#D19A66"> --partitions</span><span style="color:#D19A66"> 1</span><span style="color:#D19A66"> --topic</span><span style="color:#98C379"> test</span></span>
+<span class="line"></span></code></pre>
+</li>
+<li>
+<p>启动生产者客户端</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="shell"><code><span class="line"><span style="color:#61AFEF">./bin/windows/kafka-console-producer.bat</span><span style="color:#D19A66"> --broker-list</span><span style="color:#98C379"> localhost:9092</span><span style="color:#D19A66"> --topic</span><span style="color:#98C379"> test</span></span>
+<span class="line"></span></code></pre>
+</li>
+<li>
+<p>启动消费者客户端</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="shell"><code><span class="line"><span style="color:#61AFEF">./bin/windows/kafka-console-consumer.bat</span><span style="color:#D19A66"> --bootstrap-server</span><span style="color:#98C379"> localhost:9092</span><span style="color:#D19A66"> --topic</span><span style="color:#98C379"> test</span><span style="color:#D19A66"> --from-beginning</span><span style="color:#98C379"> This</span><span style="color:#98C379"> is</span><span style="color:#98C379"> a</span><span style="color:#98C379"> message</span></span>
+<span class="line"></span></code></pre>
+</li>
+</ol>
+<p>PS：最开始，我是单独下载zookeeper配置的server，在启动消费者客户端时会发生报错，但是依旧可以完成发送和订阅的操作，也把启动命令记在下面</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="shell"><code><span class="line"><span style="color:#61AFEF">./bin/windows/kafka-console-consumer.bat</span><span style="color:#D19A66"> --zookeeper</span><span style="color:#98C379"> localhost:2181</span><span style="color:#D19A66"> --topic</span><span style="color:#98C379"> test</span></span>
+<span class="line"></span></code></pre>
+<p>接下来就可以在第4步打开的客户端上输入信息并回车，再进入第5步打开的客户端上查看是否收到了订阅</p>
+<p>如果可以收到信息，那么这部分的环境搭建已经完成</p>  </article> <footer class="mt-5">  <p class="flex items-center gap-2"> <span class="inline-flex items-center"> <i class="i-mdi-chevron-double-left icon"></i> <a href="/posts/algorithm/algorithm-string-search-kmp">上一篇: 浅谈KMP算法</a> </span> <span class="inline-flex items-center"> <a href="/posts/install/hexo-install-steps">下一篇: Hexo安装部署与同步</a> <i class="i-mdi-chevron-double-right icon"></i> </span> </p> </footer> <!-- <footer class="mt-5">
+  <p class="mb-2.5">{t('page_number', page.currentPage)} / {t('page_count', page.lastPage)}</p>
+  <p class="flex items-center gap-2">
+    <span class="inline-flex items-center">
+      <i class="i-mdi-chevron-double-left icon"></i>
+      {page.url.prev ? <a href={page.url.prev}> {t('prev')} </a> : <span>{t('prev')}</span>}
+    </span>
+
+    <span class="inline-flex items-center">
+      {page.url.next ? <a href={page.url.next}>{t('next')}</a> : <span>{t('next')}</span>}
+      <i class="i-mdi-chevron-double-right icon"></i>
+    </span>
+  </p>
+</footer> -->  <div py-16>     </div>  </main> <footer font-bold text-3 un-flex="~ col gap-1" un-lg="gap-3.5" class="lg:hidden p-7.5"> <p>
+© 2024 <a target="_blank" href="https://www.fanschou.com" rel="noopener noreferrer">Fan Zhou</a> </p> <p> <a target="_blank" href="https://beian.miit.gov.cn/">皖ICP备2021007904号</a> </p> <p> <a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490"> <img src="https://images.fanschou.com/blog/site/beian_gongan.webp" alt="备案" style="float:left;">皖公网安备 34180202000490号
+</a> </p> <!-- <p>
+    Theme
+    <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography" rel="noopener noreferrer">Typography</a>
+      by <a target="_blank" href="https://moeyua.com" rel="noopener noreferrer">Moeyua</a>
+  </p>
+  <p>
+    Proudly published with
+    <a target="_blank" href="https://astro.build" rel="noopener noreferrer">Astro</a>
+  </p> --> </footer> </div> </body></html>  

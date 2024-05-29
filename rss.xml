@@ -1,0 +1,1474 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet href="/pretty-feed-v3.xsl" type="text/xsl"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>六脉神间</title><description>一个兢兢业业码农的个人博客，记录着学习笔记和生活中的思考，期待着和所有人相遇</description><link>https://www.fanschou.com/</link><item><title>用Redis滑动窗口解决CPU100%的问题</title><link>https://www.fanschou.com/posts/redis/redis-sliding-window/</link><guid isPermaLink="true">https://www.fanschou.com/posts/redis/redis-sliding-window/</guid><description>在高并发的情况中，经常需要考虑的一个问题就是线程之间的死锁问题，并且总结出了很多最佳实践，这篇文章我们就来聊聊导致死锁的原因，以及如何避免产生死锁。</description><pubDate>Thu, 22 Sep 2022 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;最近接了个老项目的维护，不多说了，都是坑（流泪ing），然后就慢慢的解决一些问题。首先就是这个项目用的Redis集群总是告警，CPU总是90%以上，严重影响了业务的稳定性，所以先对这个下手。&lt;/p&gt;
+&lt;h2&gt;分析问题&lt;/h2&gt;
+&lt;p&gt;Redis 的 CPU 飙升可能有很多原因，先从慢日志开始排查，立马就发现了问题，请求中有大量的 &lt;code&gt;keys&lt;/code&gt; 命令去扫 key，大量的模糊搜索 key 导致了 Redis 的 CPU 升高。然后根据 &lt;code&gt;keys&lt;/code&gt; 扫描的 key 值去代码中查找，发现基本集中在一块业务中，这里我抽象一下这块的业务，简单描述一下。&lt;/p&gt;
+&lt;p&gt;这个项目做的是一个自动打电话的业务，每个电话在一段时间内只能呼出固定次数，这里有两个关键点：&lt;strong&gt;一段时间内&lt;/strong&gt;和&lt;strong&gt;固定次数&lt;/strong&gt;。项目老代码的实现就秀了啊，每次拨打之后存一个 key ，格式类似于 &lt;code&gt;call_电话号码_时间戳&lt;/code&gt; ，然后 key 的过期时间就设置成前面说的&lt;strong&gt;一段时间内&lt;/strong&gt;这个时间长度。当进行拨打前置校验时，直接通过 &lt;code&gt;keys call_电话号码_*&lt;/code&gt; 扫描拿到这个电话打过的次数，因为设置了过期时间，所以有效的 key 的个数，就是一段时间内已经呼出的次数，再用这个次数和阈值比较即可。从这个方面来说，这个方案确实也实现了业务要求，但是 Redis 就被一次次的 &lt;code&gt;keys&lt;/code&gt; 命令扫爆了。&lt;/p&gt;
+&lt;h2&gt;新的解决方案&lt;/h2&gt;
+&lt;p&gt;在原因分析中，其实已经发现了，我们需要统计一段时间内的电话拨打次数，因为时间往前走的关系，这个&lt;strong&gt;一段时间&lt;/strong&gt;所囊括的时间范围也是不断往前移动的。这个场景就很熟悉了，就是典型的滑动窗口问题，而用 Redis 去实现的话，有比前面那种更优雅的方式。这里我们采用了 &lt;code&gt;zset&lt;/code&gt; 去实现滑动窗口。&lt;/p&gt;
+&lt;p&gt;我们以 &lt;code&gt;call_电话号码&lt;/code&gt; 作为 &lt;code&gt;zset&lt;/code&gt; 的key，然后每打一个电话，往这个 &lt;code&gt;zset&lt;/code&gt; 添加一个 value 和 score ， value 这里我们用了时间戳，因为估算的并发可以确保这个 value 不会重复，这里要注意一点，就是 value 一定要确保不能重复，否则 &lt;code&gt;zset&lt;/code&gt; 的数量是不准的，可能比你实际的数量偏小； score 这里用的也是时间戳，当来请求校验的时候，先使用 &lt;code&gt;zremrangeByScore&lt;/code&gt; 命令，移除掉超过时间区间的 value ，然后 &lt;code&gt;zcard&lt;/code&gt; 命令再去统计 value 的数量，就是我们要的一段时间内已经呼出的次数。这里连续操作了两次 Redis ，所以可以用 &lt;code&gt;pipeline&lt;/code&gt; 去把操作放在一起。&lt;/p&gt;
+&lt;h2&gt;代码实现&lt;/h2&gt;
+&lt;p&gt;下面我用 Java 写一下简单的样板，用的是 Jedis 操作 Redis 。&lt;/p&gt;
+&lt;p&gt;添加记录的地方很简单，就是一条 &lt;code&gt;zadd&lt;/code&gt; 命令：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;jedis.zadd(key, score, member);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;然后在判断限制的地方，获取 &lt;code&gt;zset&lt;/code&gt; 的数量：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;/**
+ * 查看限流周期内的行为次数
+ *
+ * @param key           行为key
+ * @param period        限流周期,unit=second
+ * @return
+ */
+public long getActivityTimes(String key, int period) {
+    long count = 0L;
+    try(Jedis jedis = getJedis()){
+        long ts = System.currentTimeMillis();
+        Pipeline pipe = jedis.pipelined();
+        pipe.multi();
+        // 移除滑动窗口之外的数据
+        pipe.zremrangeByScore(key, 0, ts - (period * 1000.0));
+        Response&amp;lt;Long&amp;gt; zcount = pipe.zcard(key);
+        // 设置行为的过期时间，如果数据为冷数据，zset将会删除以此节省内存空间
+        pipe.expire(key, period);
+        pipe.exec();
+        pipe.close();
+        count = zcount.get();
+    } catch (Exception e) {
+        log.error(&quot;redis getActivityTimes error, key: {}&quot;, key, e);
+    }
+
+    return count;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这里先用 &lt;code&gt;zremrangeByScore&lt;/code&gt; 删除过期的 value ，然后 &lt;code&gt;zcard&lt;/code&gt; 统计数量，同时设置了 key 的过期时间，避免长期占用内存。&lt;/p&gt;
+&lt;h2&gt;优化后&lt;/h2&gt;
+&lt;p&gt;上述的改动发布之后，Redis的CPU占用就直线下降了，说明这次的优化还是很有成效的。
+&lt;img src=&quot;https://images.fanschou.com/blog/redis-sliding-window/20220922_01_001.webp&quot; alt=&quot;Redis的CPU占用&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;如果你也有相关类似的问题，也可以参考这种方案，当然你也可以单纯使用滑动窗口用在别的业务实现上。希望你也能有所收获。&lt;/p&gt;
+</content:encoded><author>Fan Zhou</author></item><item><title>使用acme申请TLS证书</title><link>https://www.fanschou.com/posts/devops/apply-for-TLS-certificate-using-acme/</link><guid isPermaLink="true">https://www.fanschou.com/posts/devops/apply-for-TLS-certificate-using-acme/</guid><description>本文介绍了如何使用acme申请TLS证书，并将TLS证书安装到指定的目录下</description><pubDate>Tue, 06 Sep 2022 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;当前互联网中最多的流量应该是HTTP流量，但是HTTP流量相当于是明文的数据，也就是说在开放的互联网中，它是毫无保护的信息。随着时代的发展，越来越多的网站会为自己的HTTP流量套上一层加密，也就是我们所熟知的HTTPS流量，它与HTTP流量的区别就是它有一层TLS加密，整个加密的原理及流程，不是本篇文章的重点，本篇文章主要会指导你如何申请一个TLS证书。
+TLS刚出来的时候，大多都是需要付费获得，这就导致了大部分小站点的站长可能不愿意或者没有能力每年去负担这个费用，好随着 HTTPS 的普及，出现了一些免费提供TLS证书的机构，所产生的不方便之处也不过是证书有效期比较短，这对我们来说，是属于可以克服的困难。这里我们使用letsencrypt提供的免费证书服务。
+为了方便的申请证书而不需要与证书机构的API打交道，网络上也有很多的工具，这里我会使用一个叫做 &lt;a href=&quot;https://github.com/acmesh-official/acme.sh&quot;&gt;acme.sh&lt;/a&gt; 的证书管理工具，它简单、轻量、高效，并可完成证书自动更新。让我们开始吧～&lt;/p&gt;
+&lt;h2&gt;安装 &lt;code&gt;acme.sh&lt;/code&gt;&lt;/h2&gt;
+&lt;p&gt;使用官方安装脚本&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;wget -O -  https://get.acme.sh | sh
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;普通用户和 root 用户都可以安装使用。脚本会把相关文件都放在&lt;code&gt;~/.acme.sh/&lt;/code&gt;下，并创建 一个 bash 的 alias, 方便你的使用： &lt;code&gt;alias acme.sh=~/.acme.sh/acme.sh&lt;/code&gt;，安装过程不会污染已有的系统任何功能和文件, 所有的修改都限制在安装目录中: &lt;code&gt;~/.acme.sh/&lt;/code&gt;。当然也有其他高级的安装选项，可以自行查看官网的&lt;a href=&quot;https://github.com/acmesh-official/acme.sh/wiki/How-to-install&quot;&gt;安装教程&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;尝试执行&lt;code&gt;acme.sh&lt;/code&gt;，这个时候，可能会提示命令不存在，通过刷新一下环境生效配置。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;. .bashrc
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;设置自动更新acme&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;acme.sh --upgrade --auto-upgrade
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;因为&lt;code&gt;acme.sh&lt;/code&gt;目前支持不止一个免费证书注册机构，这里我们设置默认为&lt;code&gt;letsencrypt&lt;/code&gt;，&lt;code&gt;acme.sh&lt;/code&gt;本身默认的&lt;code&gt;zerossl&lt;/code&gt;需要邮箱，还是&lt;code&gt;letsencrypt&lt;/code&gt;更简单更广泛应用一点。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;acme.sh --set-default-ca --server letsencrypt
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;证书申请&lt;/h2&gt;
+&lt;p&gt;&lt;code&gt;acme.sh&lt;/code&gt;支持两种方式验证: &lt;strong&gt;HTTP&lt;/strong&gt; 和 &lt;strong&gt;DNS 验证&lt;/strong&gt;。我个人更推荐&lt;strong&gt;DNS 验证&lt;/strong&gt;，这种方式的好处是，你不需要任何服务器，不需要任何公网IP，只需要 DNS 的解析记录即可完成验证。坏处是，如果不同时配置 &lt;code&gt;Automatic DNS API&lt;/code&gt;，使用这种方式 &lt;code&gt;acme.sh&lt;/code&gt; 将无法自动更新证书，每次都需要手动再次重新解析验证域名所有权。下面会以&lt;strong&gt;DNS 验证&lt;/strong&gt;为例介绍证书申请。&lt;/p&gt;
+&lt;h3&gt;dns验证申请证书&lt;/h3&gt;
+&lt;h4&gt;手动设置DNS记录申请&lt;/h4&gt;
+&lt;p&gt;执行如下命令：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;acme.sh --issue --dns -d 三级域名.mydomain.com --keylength ec-256 --log \
+ --yes-I-know-dns-manual-mode-enough-go-ahead-please
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这时，acme.sh 会生成相应的解析记录显示出来，会有一个txt记录的key，格式为&lt;code&gt;_acme-challenge.你的三级域名&lt;/code&gt;，然后有一串字符串作为值，你只需要在你的域名管理面板中添加这条 txt 记录即可。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/apply-for-TLS-certificate-using-acme/20220906_01_001.webp&quot; alt=&quot;DNS记录&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;等待解析完成之后, 重新生成证书:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;acme.sh --renew -d 三级域名.mydomain.com --keylength ec-256 --log \
+  --yes-I-know-dns-manual-mode-enough-go-ahead-please
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;注意第二次和第一次不同的地方，这里用的是&lt;code&gt;--renew&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;这里再解释一下用到的几个参数：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;--log&lt;/code&gt;：这个是用来打印日志的，如果有报错可以看到&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;--keylength&lt;/code&gt;：这个用来指定证书类型，这里我们使用ECC证书，当然你可以使用RSA证书，按需选择&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;如果担心自己操作有问题怎么办？可以直接在命令中加入测试的参数&lt;code&gt;--issue --test&lt;/code&gt;来验证是否可以成功申请，这样可以避免在本地配置有误时，反复申请证书失败，超过 &lt;code&gt;Let&apos;s Encrypt&lt;/code&gt; 的频率上限（比如，每小时、每个域名、每个用户失败最多 5 次），导致后面的步骤无法进行。如果出现问题可以再加上&lt;code&gt;--debug&lt;/code&gt;参数，查看详细的申请过程和具体的错误。&lt;/p&gt;
+&lt;h4&gt;DNS API自动申请&lt;/h4&gt;
+&lt;p&gt;DNS 方式的真正强大之处在于可以使用域名解析商提供的 API 自动添加 txt 记录完成验证。&lt;code&gt;acme.sh&lt;/code&gt; 目前支持 cloudflare，dnspod，cloudxns，godaddy 以及 ovh 等数十种解析商的自动集成。&lt;/p&gt;
+&lt;p&gt;以 dnspod 为例, 你需要先用 dnspod 账号登录到&lt;a href=&quot;https://developer.godaddy.com/keys&quot;&gt;开发者平台&lt;/a&gt;，点击生成API Key按钮
+&lt;img src=&quot;https://images.fanschou.com/blog/apply-for-TLS-certificate-using-acme/20220906_01_002.webp&quot; alt=&quot;创建API Key&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;选择生产环境，直接下一步，生成你的 API id 和 API Key。
+&lt;img src=&quot;https://images.fanschou.com/blog/apply-for-TLS-certificate-using-acme/20220906_01_003.webp&quot; alt=&quot;生成API Key&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;然后设置环境变量，使用刚刚申请的 API id 和 API Key，执行命令：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;export DP_Id=&quot;yourapiid&quot;
+export DP_Key=&quot;youapikey&quot;
+acme.sh --issue --dns dns_gd -d 三级域名.mydomain.com --keylength ec-256 --log
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;证书就会自动生成了。这里给出的 API id 和 API Key 会被自动记录下来，将来你在使用 dnspod API 的时候，就不需要再次指定了。直接生成就好了。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;acme.sh  --issue   -d  三级域名.mydomain.com   --dns  dns_dp
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;可以查看官方&lt;a href=&quot;https://github.com/acmesh-official/acme.sh/wiki/dnsapi&quot;&gt;更详细的 API 用法&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;安装证书&lt;/h2&gt;
+&lt;p&gt;前面申请完的证书其实都是在&lt;code&gt;~/.acme.sh/&lt;/code&gt;中的，一般我们的证书会用在别的地方，这个时候通过&lt;code&gt;acme.sh&lt;/code&gt;的命令可以直接将证书安装到目标位置&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;acme.sh --install-cert -d 三级域名.mydomain.com \
+--cert-file      /path/to/certfile/in/apache/cert.pem  \
+--key-file       /path/to/keyfile/in/apache/key.pem  \
+--fullchain-file /path/to/fullchain/certfile/apache/fullchain.pem \
+--reloadcmd     &quot;service nginx force-reload&quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;--install-cert&lt;/code&gt;命令可以携带很多参数，来指定目标文件。并且可以指定 &lt;code&gt;reloadcmd&lt;/code&gt;，当证书更新以后，&lt;code&gt;reloadcmd&lt;/code&gt;会被自动调用，让服务器生效。&lt;/p&gt;
+&lt;p&gt;值得注意的是，这里指定的所有参数都会被自动记录下来，并在将来证书自动更新以后，被再次自动调用。&lt;/p&gt;
+&lt;h2&gt;查看已安装证书信息&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;acme.sh --info -d 三级域名.mydomain.com
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;更新证书&lt;/h2&gt;
+&lt;p&gt;目前证书在 60 天以后会自动更新，你无需任何操作。注意，如果你是通过前面说的手动设置DNS记录的方式申请的证书，那么不会进行自动更新。&lt;/p&gt;
+&lt;p&gt;请确保 cronjob 正确安装，看起来是类似这样的:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;crontab  -l
+56 * * * * &quot;/root/.acme.sh&quot;/acme.sh --cron --home &quot;/root/.acme.sh&quot; &amp;gt; /dev/null
+&lt;/code&gt;&lt;/pre&gt;
+</content:encoded><author>Fan Zhou</author></item><item><title>macOS下Launchd的介绍和使用</title><link>https://www.fanschou.com/posts/install/tutorial-of-launchd-in-macos/</link><guid isPermaLink="true">https://www.fanschou.com/posts/install/tutorial-of-launchd-in-macos/</guid><description>本文介绍了macOS下Launchd的介绍和使用</description><pubDate>Fri, 19 Aug 2022 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;Linux 上如果想后台运行一个服务，或者想定时运行某些脚本有很多的选择，比如使用Systemd或者用crontab也可以，而我手头用的系统是macOS，最近需要在本机后台运行一些脚本，在网上搜了一下，macOS有一个类似的叫 Launchd 的系统，对应使用&lt;code&gt;launchctl&lt;/code&gt;命令控制，可以达到类似的效果。&lt;/p&gt;
+&lt;h2&gt;Daemons and Agents&lt;/h2&gt;
+&lt;p&gt;Launchd 管理 Daemons 和 Agents 两种类型的任务，配置文件分别存放在不同的文件夹下，两类任务主要的区别是：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Agents 是用户登录后执行的&lt;/li&gt;
+&lt;li&gt;Daemons 是开机后就执行，可以通过&lt;code&gt;UserName&lt;/code&gt;指定用户比如&lt;code&gt;root&lt;/code&gt;用户&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2&gt;配置文件&lt;/h2&gt;
+&lt;p&gt;Launchd 配置文件以&lt;code&gt;.plist&lt;/code&gt;结尾，本质上是&lt;code&gt;xml&lt;/code&gt;格式的文件，Daemons 和 Agents 各自存放的路径也不同，具体如下表：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;类型&lt;/th&gt;
+&lt;th&gt;路径&lt;/th&gt;
+&lt;th&gt;说明&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;User Agents&lt;/td&gt;
+&lt;td&gt;~/Library/LaunchAgents&lt;/td&gt;
+&lt;td&gt;用户 Agents 当前用户登录时运行&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Global Agents&lt;/td&gt;
+&lt;td&gt;/Library/LaunchAgents&lt;/td&gt;
+&lt;td&gt;全局 Agents 任何用户登录时都会运行&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Global Daemons&lt;/td&gt;
+&lt;td&gt;/System/Library/LaunchAgents&lt;/td&gt;
+&lt;td&gt;系统 Agents 任何用户登录时都会运行&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;System Agents&lt;/td&gt;
+&lt;td&gt;/Library/LaunchDaemons&lt;/td&gt;
+&lt;td&gt;全局 Daemons 内核初始化加载完后就运行&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;System Daemons&lt;/td&gt;
+&lt;td&gt;/System/Library/LaunchDaemons&lt;/td&gt;
+&lt;td&gt;系统 Daemons 内核初始化加载完后就运行&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3&gt;文件格式&lt;/h3&gt;
+&lt;p&gt;一般配置文件名都以&lt;code&gt;com.domain.programName.plist&lt;/code&gt;格式命名，不管是 Daemons 还是 Agents ，它们的配置文件格式都是一样的，只是存放位置不同。看下面一个 hello world 的例子 &lt;code&gt;~/Library/LaunchAgents/com.example.helloword.plist&lt;/code&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&amp;gt;
+&amp;lt;!DOCTYPE plist PUBLIC &quot;-//Apple//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&amp;gt;
+&amp;lt;plist version=&quot;1.0&quot;&amp;gt;
+    &amp;lt;dict&amp;gt;
+        
+        &amp;lt;key&amp;gt;Label&amp;lt;/key&amp;gt;
+        &amp;lt;string&amp;gt;com.fanschou.helloword&amp;lt;/string&amp;gt;
+
+        &amp;lt;key&amp;gt;StandardOutPath&amp;lt;/key&amp;gt;
+        &amp;lt;string&amp;gt;/Users/fanschou/logs/stdout.log&amp;lt;/string&amp;gt;
+
+        &amp;lt;key&amp;gt;ProgramArguments&amp;lt;/key&amp;gt;
+        &amp;lt;array&amp;gt;
+            &amp;lt;string&amp;gt;/bin/echo&amp;lt;/string&amp;gt;
+            &amp;lt;string&amp;gt;hello world&amp;lt;/string&amp;gt;
+        &amp;lt;/array&amp;gt;
+        
+    &amp;lt;/dict&amp;gt;
+&amp;lt;/plist&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;我们可以发现其实就是一个xml格式的文件，除了包裹着整体的&lt;code&gt;plist&lt;/code&gt;和&lt;code&gt;dict&lt;/code&gt;之外，内部基本就是一个&lt;code&gt;key&lt;/code&gt;对应一个这个&lt;code&gt;key&lt;/code&gt;具体的值，这个值可以是&lt;code&gt;string&lt;/code&gt;也可以是一个&lt;code&gt;array&lt;/code&gt;数组。
+上面的样例定义了一个最简单的任务，只使用了&lt;code&gt;Label&lt;/code&gt;和&lt;code&gt;ProgramAgruments&lt;/code&gt;两个键：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Label&lt;/code&gt;这是个必须的键，指定这个任务名&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ProgramArguments&lt;/code&gt;是带参数的可执行文件或者脚本，上面等同于运行&lt;code&gt;/bin/echo hello world&lt;/code&gt;命令，如果执行的程序不带参数可以使用&lt;code&gt;Program&lt;/code&gt;键，但一个任务中必须包含这两个中的其中一个键&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;还有一些常用的键名，所有的键可通过&lt;code&gt;man 5 launchd.plist&lt;/code&gt;查看或者参考&lt;a href=&quot;https://www.launchd.info/&quot;&gt;这里&lt;/a&gt;&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;key&lt;/th&gt;
+&lt;th&gt;说明&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Disabled&lt;/td&gt;
+&lt;td&gt;是否不生效（launchd 忽略，不执行）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;EnvironmentVariables&lt;/td&gt;
+&lt;td&gt;设置运行环境变量&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;GroupName&lt;/td&gt;
+&lt;td&gt;启动进程的用户组。只在 Daemons 可用&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;KeepAlive&lt;/td&gt;
+&lt;td&gt;是否设置程序是一直存活着，如果退出就重启&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ProcessType&lt;/td&gt;
+&lt;td&gt;进程类型&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;RunAtLoad&lt;/td&gt;
+&lt;td&gt;是否再加载的时候就运行&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;StandardOutPath&lt;/td&gt;
+&lt;td&gt;标准输出到文件&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;StandardErrorPath&lt;/td&gt;
+&lt;td&gt;标准错误到文件&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;StartInterval&lt;/td&gt;
+&lt;td&gt;设置程序每隔多少秒运行一次&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;StartCalendarInterval&lt;/td&gt;
+&lt;td&gt;设置程序具体运行时间，类似cron表达式&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;UserName&lt;/td&gt;
+&lt;td&gt;设置用户名只在 Daemons 可用&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;WorkingDirectory&lt;/td&gt;
+&lt;td&gt;设置工作目录&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;利用这些key，这里给出一个完整一点模板参考：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&amp;gt;
+&amp;lt;!DOCTYPE plist PUBLIC &quot;-//Apple Computer//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&amp;gt;
+&amp;lt;plist version=&quot;1.0&quot;&amp;gt;
+    &amp;lt;dict&amp;gt;
+        &amp;lt;key&amp;gt;Label&amp;lt;/key&amp;gt;
+        &amp;lt;string&amp;gt;com.fanschou.macos.helloword&amp;lt;/string&amp;gt;
+        
+        &amp;lt;key&amp;gt;Disabled&amp;lt;/key&amp;gt;
+        &amp;lt;false/&amp;gt;
+        
+        &amp;lt;key&amp;gt;KeepAlive&amp;lt;/key&amp;gt;
+        &amp;lt;true/&amp;gt;
+
+        &amp;lt;key&amp;gt;RunAtLoad&amp;lt;/key&amp;gt;
+        &amp;lt;true/&amp;gt;
+        
+        &amp;lt;key&amp;gt;ProcessType&amp;lt;/key&amp;gt;
+        &amp;lt;string&amp;gt;Background&amp;lt;/string&amp;gt;
+        
+        &amp;lt;key&amp;gt;ProgramArguments&amp;lt;/key&amp;gt;
+        &amp;lt;array&amp;gt;
+            &amp;lt;string&amp;gt;/bin/echo&amp;lt;/string&amp;gt;
+            &amp;lt;string&amp;gt;hello world&amp;lt;/string&amp;gt;
+        &amp;lt;/array&amp;gt;
+        
+        &amp;lt;key&amp;gt;UserName&amp;lt;/key&amp;gt;
+        &amp;lt;string&amp;gt;root&amp;lt;/string&amp;gt;
+        
+        &amp;lt;key&amp;gt;GroupName&amp;lt;/key&amp;gt;
+        &amp;lt;string&amp;gt;wheel&amp;lt;/string&amp;gt;
+
+        &amp;lt;key&amp;gt;StandardErrorPath&amp;lt;/key&amp;gt;
+        &amp;lt;string&amp;gt;/Users/fanschou/logs/stderr.log&amp;lt;/string&amp;gt;
+
+        &amp;lt;key&amp;gt;StandardOutPath&amp;lt;/key&amp;gt;
+        &amp;lt;string&amp;gt;/Users/fanschou/logs/stdout.log&amp;lt;/string&amp;gt;
+
+        &amp;lt;key&amp;gt;WorkingDirectory&amp;lt;/key&amp;gt;
+        &amp;lt;string&amp;gt;/Users/fanschou/dev/script&amp;lt;/string&amp;gt;
+
+        &amp;lt;!-- 每隔60s运行一次，与下面的不可同时设置--&amp;gt;
+        &amp;lt;key&amp;gt;StartInterval&amp;lt;/key&amp;gt;
+        &amp;lt;integer&amp;gt;60&amp;lt;/integer&amp;gt;
+
+        &amp;lt;!-- 每天10点半运行一次，与上面的不可同时设置--&amp;gt;
+        &amp;lt;key&amp;gt;StartCalendarInterval&amp;lt;/key&amp;gt;
+        &amp;lt;dict&amp;gt;
+            &amp;lt;key&amp;gt;Minute&amp;lt;/key&amp;gt;
+            &amp;lt;integer&amp;gt;30&amp;lt;/integer&amp;gt;
+            &amp;lt;key&amp;gt;Hour&amp;lt;/key&amp;gt;
+            &amp;lt;integer&amp;gt;10&amp;lt;/integer&amp;gt;
+        &amp;lt;/dict&amp;gt;
+
+        &amp;lt;key&amp;gt;EnvironmentVariables&amp;lt;/key&amp;gt;
+        &amp;lt;dict&amp;gt;
+            &amp;lt;!-- 设置PATH，用于找不到命令的时候--&amp;gt;
+            &amp;lt;key&amp;gt;PATH&amp;lt;/key&amp;gt;
+            &amp;lt;string&amp;gt;&amp;lt;![CDATA[/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin]]&amp;gt;&amp;lt;/string&amp;gt;
+            &amp;lt;!-- 设置网络代理--&amp;gt;
+            &amp;lt;key&amp;gt;http_proxy&amp;lt;/key&amp;gt;
+            &amp;lt;string&amp;gt;&amp;lt;![CDATA[http://127.0.0.1:1080]]&amp;gt;&amp;lt;/string&amp;gt;
+        &amp;lt;/dict&amp;gt;
+
+    &amp;lt;/dict&amp;gt;
+&amp;lt;/plist&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;测试文件格式是否正确&lt;/h3&gt;
+&lt;p&gt;写完&lt;code&gt;.plist&lt;/code&gt;文件之后，可以通过&lt;code&gt;plutil&lt;/code&gt;命令测试一下文件格式有没有问题。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;plutil ~/Library/LaunchAgents/com.fanschou.helloword.plist
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;显示：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;/Users/fanschou/Library/LaunchAgents/com.fanschou.helloword.plist: OK
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;操作&lt;/h2&gt;
+&lt;p&gt;现在我们就加载和运行一个任务，上面定义了&lt;code&gt;~/Library/LaunchAgents/com.fanschou.helloword.plist&lt;/code&gt;，配置中把标准输出重定向到了&lt;code&gt;/Users/fanschou/logs/stdout.log&lt;/code&gt;，我们运行测试下。&lt;/p&gt;
+&lt;h3&gt;加载任务&lt;/h3&gt;
+&lt;p&gt;第一步需要进行&lt;strong&gt;加载(load)&lt;/strong&gt;，使用&lt;code&gt;launchctl load &amp;lt;path&amp;gt;&lt;/code&gt;命令：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;launchctl load -w ~/Library/LaunchAgents/com.fanschou.helloword.plist
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这里注意，&lt;code&gt;launchctl load &amp;lt;path&amp;gt;&lt;/code&gt;只会加载没有被&lt;strong&gt;disable&lt;/strong&gt;的任务，可以加&lt;code&gt;-w&lt;/code&gt;参数 &lt;code&gt;launchctl load -w &amp;lt;path&amp;gt;&lt;/code&gt;覆盖。&lt;/p&gt;
+&lt;h3&gt;启动任务&lt;/h3&gt;
+&lt;p&gt;然后手动&lt;strong&gt;启动(start)&lt;/strong&gt; 任务，如果配置中设置了&lt;code&gt;RunAtLoad&lt;/code&gt;或者&lt;code&gt;KeepAlive&lt;/code&gt;为&lt;code&gt;true&lt;/code&gt;，则在&lt;code&gt;launchctl load&lt;/code&gt;时就会启动。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;launchctl start ~/Library/LaunchAgents/com.fanschou.helloword.plist
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;我们查看&lt;code&gt;/Users/fanschou/logs/stdout.log&lt;/code&gt;会有日志输出。因为这是一个一次性任务，所以正常运行完就会退出，如果是运行一些服务的话，就会以一个守护进程的模式一直运行，直到手动停止，或者报错退出。&lt;/p&gt;
+&lt;h3&gt;管理任务&lt;/h3&gt;
+&lt;p&gt;使用&lt;code&gt;launchctl list&lt;/code&gt;列出当前加载的任务，第一列代表进程ID，因为上面的helloword程序运行一次就退出了所以显示&lt;code&gt;-&lt;/code&gt;，运行中的则显示进程ID；第二列是程序上次运行退出的code，&lt;code&gt;0&lt;/code&gt;代表正常退出，如果是正数代表退出的时候是有错误的，负数代表是接收到信号被终止的&lt;/p&gt;
+&lt;h3&gt;退出任务&lt;/h3&gt;
+&lt;p&gt;当不想运行任务时，可以通过命令&lt;code&gt;launchctl stop &amp;lt;service_name&amp;gt;&lt;/code&gt;指定服务名终止服务，或者通过&lt;code&gt;launchctl stop &amp;lt;path&amp;gt;&lt;/code&gt;指定路径进行终止：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;launchctl stop com.fanschou.helloword
+launchctl stop ~/Library/LaunchAgents/com.fanschou.helloword.plist
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;卸载任务&lt;/h3&gt;
+&lt;p&gt;如果不想再使用任务了的话，也可以直接将任务卸载掉，可以通过命令&lt;code&gt;launchctl unload &amp;lt;path&amp;gt;&lt;/code&gt;指定路径卸载一个任务，或者通过&lt;code&gt;launchctl remove &amp;lt;service_name&amp;gt;&lt;/code&gt;指定服务名卸载任务：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;launchctl remove com.fanschou.helloword
+launchctl unload ~/Library/LaunchAgents/com.fanschou.helloword.plist
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;launchctl unload &amp;lt;path&amp;gt;&lt;/code&gt;只会停止和卸载这个任务，但下次启动还会加载，与加载任务的命令一样，可以使用&lt;code&gt;-w&lt;/code&gt;参数&lt;code&gt;launchctl unload -w &amp;lt;path&amp;gt;&lt;/code&gt;停止任务，下次启动也不会起来，也就是相当于标记了&lt;strong&gt;disable&lt;/strong&gt;&lt;/p&gt;
+&lt;h3&gt;调试任务&lt;/h3&gt;
+&lt;p&gt;如果任务跑不起来的话，可以先尝试使用&lt;code&gt;plutil&lt;/code&gt;命令检查语法，然后设置&lt;code&gt;StandardOutPath&lt;/code&gt;、&lt;code&gt;StandardErrorPath&lt;/code&gt;、&lt;code&gt;Debug&lt;/code&gt;键，查看具体输出的日志进行调试。&lt;/p&gt;
+</content:encoded><author>Fan Zhou</author></item><item><title>排序算法系列之插入排序</title><link>https://www.fanschou.com/posts/algorithm/algorithm-insertion-sort/</link><guid isPermaLink="true">https://www.fanschou.com/posts/algorithm/algorithm-insertion-sort/</guid><description>本篇文章介绍了常见的排序算法——插入排序的排序过程，聊一聊它的时间复杂度和稳定性，以及可以对它进行的一些优化。</description><pubDate>Wed, 18 May 2022 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;插入排序（Insertion-Sort）的算法描述是一种简单直观的排序算法。举例来说的话，很像我们学生时代，第一次做课间操排队的情况，按身高一个个往队伍里面安排，最后每个做操的队列就是严格按身高递增的。今天我们还是从算法本身、时间复杂度以及稳定性方面来看看插入排序，并且思考一下能做怎样的优化。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;如果没有了解过诸如复杂度、稳定性等相关算法相关的概念，可以先去看看&lt;a href=&quot;https://www.fanschou.com/algorithm/algorithm-sort-opening/&quot;&gt;排序算法系列之开篇&lt;/a&gt;，里面有大概的介绍。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2&gt;排序思想&lt;/h2&gt;
+&lt;p&gt;传统插入排序的工作原理是通过逐步构建有序序列，最终完成整个序列的排布。对于未排序数据，在已排序序列中从后向前扫描，找到相应位置并插入。插入排序在实现上，通常采用就地排序（即只需用到O(1)的额外空间的排序），因而在从后向前扫描过程中，需要反复把已排序元素逐步向后挪位，为最新元素提供插入空间。&lt;/p&gt;
+&lt;h2&gt;排序过程&lt;/h2&gt;
+&lt;p&gt;假设现在有一个待排序的队列：[16, 24, 7, 43, 32, 11, 15, 30, 28, 38]，我们按下面的排序过程进行排序：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;从第一个元素开始，该元素可以认为已经被排序&lt;/li&gt;
+&lt;li&gt;取出下一个元素，在已经排序的元素序列中从后向前扫描&lt;/li&gt;
+&lt;li&gt;如果该元素（已排序队列中的）大于新元素，将该元素移到下一位置&lt;/li&gt;
+&lt;li&gt;重复步骤③，直到找到已排序的元素小于或者等于新元素的位置&lt;/li&gt;
+&lt;li&gt;将新元素插入到该位置后&lt;/li&gt;
+&lt;li&gt;重复步骤②~⑤&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;下面我们完整的看一遍动画演示
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-insertion-sort/20220518_01_001.gif&quot; alt=&quot;插入排序完整动画&quot; /&gt;&lt;/p&gt;
+&lt;h2&gt;代码实现&lt;/h2&gt;
+&lt;p&gt;了解了插入排序的整个排序过程，我们用代码将它实现一遍&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;public class InsertionSort {
+   public static int[] insertionSort(int[] arr) {
+        if (arr == null || arr.length &amp;lt; 2) {
+            return arr;
+        }
+        int left = 0;
+        int right = arr.length - 1;
+        for (int i = left, j = i; i &amp;lt; right; j = ++i) {
+            int ai = arr[i + 1];
+            while (ai &amp;lt; arr[j]) {
+                arr[j + 1] = arr[j];
+                if (j-- == left) {
+                    break;
+                }
+            }
+            arr[j + 1] = ai;
+        }
+        return arr;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;性能分析&lt;/h3&gt;
+&lt;p&gt;分析一下上面实现的复杂度：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;平均时间复杂度：O(n²)&lt;/li&gt;
+&lt;li&gt;最差时间复杂度：O(n²)&lt;/li&gt;
+&lt;li&gt;空间复杂度：O(1)&lt;/li&gt;
+&lt;li&gt;稳定性：稳定&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果插入排序的目标是把n个元素的序列升序排列，那么采用插入排序存在最好情况和最坏情况：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;最好情况：序列已经是升序排列，在这种情况下，需要进行的比较操作需(n-1)次即可。&lt;/li&gt;
+&lt;li&gt;最坏情况：序列是降序排列，那么此时需要进行的比较共有n(n-1)/2次。
+插入排序的赋值操作是比较操作的次数减去(n-1)次。平均来说插入排序算法复杂度为O(n²)。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;最优的空间复杂度为开始元素已排序，则空间复杂度为 0；
+最差的空间复杂度为开始元素为逆排序，则空间复杂度最坏时为 O(N);
+平均的空间复杂度为O(1)&lt;/p&gt;
+&lt;h3&gt;代码优化&lt;/h3&gt;
+&lt;p&gt;我们仔细观察排序的过程，可以发现直接插入排序每次往前插入时，是按顺序依次往前查找，数据量较大时，必然比较耗时，效率低。我们可以采取二分查找的方式去定位要插入的位置，然后进行插入，也就是所谓的&lt;strong&gt;折半插入&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;二分插入排序相对直接插入排序而言：平均性能更快，时间复杂度降至O(NlogN)，排序是稳定的，但排序的比较次数与初始序列无关，相比直接插入排序，在速度上有一定提升。逻辑步骤如下：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;从第一个元素开始，该元素可以认为已经被排序&lt;/li&gt;
+&lt;li&gt;取出下一个元素，在已经排序的元素序列中二分查找到第一个比它大的数的位置&lt;/li&gt;
+&lt;li&gt;将新元素插入到该位置后&lt;/li&gt;
+&lt;li&gt;重复上述两步&lt;/li&gt;
+&lt;/ol&gt;
+&lt;pre&gt;&lt;code&gt;public static void binaryInsertSort(int[] arr) {
+    int left;
+    int right;
+    int len = arr.length;
+    for (int i = 1; i &amp;lt; len; i++) {
+        int key = arr[i];
+        left = 0;
+        right = i - 1;
+        while (left &amp;lt;= right) {
+            int mid = (left + right) / 2;
+            if (arr[mid] &amp;gt; key) {
+                right = mid - 1;
+            } else {
+                left = mid + 1;
+            }
+        }
+
+        if (i - left &amp;gt;= 0) {
+            System.arraycopy(arr, left, arr, left + 1, i - left);
+        }
+
+        arr[left] = key;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;总结&lt;/h2&gt;
+&lt;p&gt;插入排序的总体思路是将未排序的元素往已排序的队列中插入，不可避免的涉及到元素的移动，所以一般不适合对于数据量比较大的排序应用。但是，如果需要排序的数据量很小，那么插入排序还是一个不错的选择。尤其当数据基本有序时，采用插入排序可以明显减少数据交换和数据移动次数，进而提升排序效率。 在Java的JDK工具类中，比如Arrays.sort的底层排序算法中，都将插入排序作为快速排序的补充，用于少量元素的排序。这部分后面也会进行详细的深入源码探究。&lt;/p&gt;
+&lt;p&gt;到这里，就介绍完了有关插入排序相关的一些知识，如果你发现文中有任何错误，欢迎通过&lt;a href=&quot;https://www.fanschou.com/author/#%E5%85%B3%E4%BA%8E%E7%AB%99%E7%82%B9&quot;&gt;关于站点&lt;/a&gt;的联系方式进行反馈。&lt;/p&gt;
+</content:encoded><author>Fan Zhou</author></item><item><title>蓄水池抽样算法——解决以相同概率抽取样本的问题</title><link>https://www.fanschou.com/posts/algorithm/algorithm-reservoir-sampling/</link><guid isPermaLink="true">https://www.fanschou.com/posts/algorithm/algorithm-reservoir-sampling/</guid><description>本篇文章介绍了蓄水池抽样算法，是一种用来解决未知样本数量的情况下，以相同概率抽取样本的问题的算法</description><pubDate>Thu, 12 May 2022 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;问题引入&lt;/h2&gt;
+&lt;p&gt;我们在解决一些算法问题时，会遇到一种要求：在抽取样本时，保证每个样本被抽取的概率是一样的。通常这种情况下，给定样本的数量是确定的，那么我们可以对样本编号，然后在 [1, 样本数量] 之中随机一个数字，然后取这个数字对应编号的样本，就可以达到抽取概率一致的要求。&lt;/p&gt;
+&lt;p&gt;那么，我们考虑再复杂一点的情况，如果我们提前不知道样本总数，如何保证最后抽取的样本概率是一致的？这篇文章介绍的蓄水池抽样算法就可以解决这个问题。照例，还是选择一道leetcode的题目作为整个讲解的例子：&lt;a href=&quot;https://leetcode.cn/problems/linked-list-random-node/&quot;&gt;382. 链表随机节点&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;先来看看题目内容&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;给你一个单链表，随机选择链表的一个节点，并返回相应的节点值。每个节点 被选中的概率一样 。
+实现 Solution 类：
+&lt;strong&gt;·&lt;/strong&gt; Solution(ListNode head) 使用整数数组初始化对象。
+&lt;strong&gt;·&lt;/strong&gt; int getRandom() 从链表中随机选择一个节点并返回该节点的值。链表中所有节点被选中的概率相等。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2&gt;已知样本总数的解决办法&lt;/h2&gt;
+&lt;p&gt;根据题目的提示，由于链表长度只有 $10^4$，我们可以在初始化时把链表预处理到一个数组内，然后在查询时，随机在 [1, 数组大小] 的区间中抽取一个下标，再将数组中对应下标的内容返回。&lt;/p&gt;
+&lt;p&gt;代码如下：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;class Solution {
+    List&amp;lt;Integer&amp;gt; list = new ArrayList&amp;lt;&amp;gt;();
+    Random random = new Random(20220512);
+    public Solution(ListNode head) {
+        while (head != null) {
+            list.add(head.val);
+            head = head.next;
+        }
+    }
+    public int getRandom() {
+        int idx = random.nextInt(list.size());
+        return list.get(idx);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这种方式就是前面提到的已知样本总数情况的解法，可以很容易得到算法复杂度如下：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;时间复杂度：令 n 为链表长度，预处理数组的复杂度为 O(n)；随机获取某个值的复杂度为 O(1)&lt;/li&gt;
+&lt;li&gt;空间复杂度：O(n)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果没有所谓的 &lt;strong&gt;「题目的提示」&lt;/strong&gt; ，只有一个链表的头节点，那么如何在一次遍历下就得到一个抽取概率相同的结果呢？&lt;/p&gt;
+&lt;h2&gt;蓄水池抽样&lt;/h2&gt;
+&lt;h3&gt;执行过程&lt;/h3&gt;
+&lt;p&gt;蓄水池抽样整体的过程如下：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;从前往后处理每个样本，假设处理到第 i 个（编号从 1 开始），对第 i 个样本进行一个等概率计算，这个概率为 $\frac1i$，含义为在 [1, i] 这个区间内，第 i 个样本成为被选中答案的概率&lt;/li&gt;
+&lt;li&gt;如果上一步计算中，第 i 个样本被抽中为答案，记录下来&lt;/li&gt;
+&lt;li&gt;每个样本做第一步的操作，不同的是上面的等概率的大小是随着样本的位置而变小的，如果被抽中为答案就覆盖上一次的结果&lt;/li&gt;
+&lt;li&gt;直到遍历完所有样本，最后一个最终可以确保每个样本成为答案的概率均为 $\frac1n$（其中 n 为样本总数）&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;为什么仅仅只是遍历一次链表，然后推移一下每个样本的抽取概率，就可以保证每个样本成为答案的概率都是均等的？下面就来推演一下。&lt;/p&gt;
+&lt;h3&gt;原理&lt;/h3&gt;
+&lt;p&gt;假设最终成为答案的样本编号为 k（编号从 1 开始），那么 k 成为答案的充要条件为「在遍历到 k 时被选中」并且「遍历大于 k 的所有元素时，均没有被选择（没有覆盖）」。对应的概率如下：&lt;/p&gt;
+&lt;p&gt;$$
+P=\frac1k\times\left(1-\frac1{k+1}\right)\times\left(1-\frac1{k+2}\right)\times\dots\times\left(1-\frac1n\right)
+$$&lt;/p&gt;
+&lt;p&gt;首项 $\frac1k$ 为选中 k 的概率，后面每项分别为编号为 [k + 1, n] 的样本 &lt;strong&gt;不被选中&lt;/strong&gt; 的概率。&lt;/p&gt;
+&lt;p&gt;化简得：
+$$
+P=\frac1k\times\frac k{k+1}\times\frac{k+1}{k+2}\times\dots\times\frac{n-1}n
+$$&lt;/p&gt;
+&lt;p&gt;继续化简得：
+$$
+P=\frac1n
+$$&lt;/p&gt;
+&lt;p&gt;对应到上面的步骤，计算 i 样本的概率相当于首项的 $\frac1k$ ，如果答案不被覆盖，那么等于上面公式中首项后面的概率（遍历大于 k 的所有元素时，均没有被选择的概率）发生了，那么根据公式的化简结果，选择到样本的概率就是 $\frac1n$ ；如果答案被覆盖，那么选择到的最终答案也一定符合上面公式的计算，也同样符合等概率 $\frac1n$ 的要求。&lt;/p&gt;
+&lt;h3&gt;代码实现&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;class Solution {
+    ListNode head;
+    Random random = new Random(20220512);
+
+    public Question0382(ListNode head) {
+        head = head;
+    }
+
+    public int getRandom() {
+        int ans = 0;
+        int idx = 0;
+        ListNode t = head;
+        while (t != null &amp;amp;&amp;amp; ++idx &amp;gt;= 0) {
+            if (random.nextInt(idx) == 0) {
+                ans = t.val;
+            }
+            t = t.next;
+        }
+        return ans;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;算法的复杂度如下：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;时间复杂度：令 n 为链表长度，随机获取某个值的复杂度为 O(n)&lt;/li&gt;
+&lt;li&gt;空间复杂度：O(1)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;最后&lt;/h2&gt;
+&lt;p&gt;本篇文章介绍了蓄水池抽样算法，主要用来解决未知样本数量的情况下，以相同概率抽取样本的问题，从概率的角度推演了它是如何做到相同概率抽取的，希望可以帮助你解决其他相似的问题~~完结撒花🎉🎉🎉&lt;/p&gt;
+</content:encoded><author>Fan Zhou</author></item><item><title>从一道字节算法面试题聊聊前缀和的运用</title><link>https://www.fanschou.com/posts/algorithm/partial-sum-by-bytedance-interview/</link><guid isPermaLink="true">https://www.fanschou.com/posts/algorithm/partial-sum-by-bytedance-interview/</guid><description>最近面试字节碰到了一道算法题，当场没做出来，只给出了暴力解法，面试官显然是不满意的。结束面试后，重新审视了这道题，可以用一种更有效率的解法去做，本篇文章就让我和大家一起聊一聊吧~</description><pubDate>Thu, 28 Apr 2022 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;最近笔者在找工作，怀着忐忑的心情投了字节，想着也看看自己刷leetcode每日一题坚持的效果，哈哈哈~~~废话不多说，直接上题~&lt;/p&gt;
+&lt;h2&gt;题目：求连续子数组的最小长度&lt;/h2&gt;
+&lt;p&gt;我拿到的题目大致的描述如下：&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;给定一个整数数组 nums 和目标值 target ，求一个 nums 的连续子数组，使的连续子数组的和是 target 的倍数，并且子数组的长度最小
+示例：nums=[23,2,4,6,7], tartget = 6，最小长度为 2&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;当时写的时候，第一反应是如果不是求 target 的倍数，而是直接等于 target，貌似会简单点？结果就是想了3分钟，没有想通，面试官说可以先暴力解，然后想办法优化，于是我就先手撸了一个暴力解法，双层循环跑出了答案。接下来就是想了半天，也想到了前缀和，但是没搞通 target的倍数 这一关键点，时间到了之后，面试官就进下一环节了。这里也贴一下暴力解法吧，复杂度为O(n²)，可以对照后面的优化解法。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;public static int getMinLength1(int[] nums, int target){
+    int minLength = Integer.MAX_VALUE;
+    int n = nums.length;
+    for (int i = 0; i &amp;lt; n; i++) {
+        int sum = nums[i];
+        for (int j = i; j &amp;lt; n; j++) {
+            sum = i != j ? sum + nums[j] : sum;
+            if(sum % target == 0){
+                minLength = Math.min(minLength, j - i + 1);
+            }
+        }
+    }
+    return minLength == Integer.MAX_VALUE ? - 1 : minLength;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;结束面试之后，我立马去leetcode上搜索题目，确实找到了相似的一道题，但是也不太一样，不过题解确实让我想到了思路，这里我贴一下相似的这道leetcode题：&lt;a href=&quot;https://leetcode-cn.com/problems/continuous-subarray-sum/&quot;&gt;523. 连续的子数组和&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;这道相似题的题解提供给我最大的提示就是：&lt;code&gt;前缀和&lt;/code&gt; + &lt;code&gt;同余定理&lt;/code&gt;。基于这两点，其实很容易就想到解决办法了。我先来说说什么是前缀和&lt;/p&gt;
+&lt;h2&gt;前缀和&lt;/h2&gt;
+&lt;p&gt;前缀和是一种重要的预处理，能大大降低查询的时间复杂度。可以简单理解为“数列的前n项的和”。拿算法题的示例来说，nums 数组[23,2,4,6,7]，它对应到的前缀和数组 psum 是这么计算的：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;psum[0]= nums[0] = 23
+psum[1]= psum[0] + nums[1] = 25
+psum[2]= psum[1] + nums[2] = 29
+psum[3]= psum[2] + nums[3] = 35
+psum[4]= psum[3] + nums[4] = 42
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;此时前缀和有个重要的性质来了，就是它可以直接计算出原数组任意两个坐标之间的数值之和。我们还是以上面这个数组为例，当我们想计算下标0到2区间的数值和，直接使用&lt;code&gt;psum[2]-psum[0]&lt;/code&gt;得到结果为 6，不需要任何额外累加的过程。
+另外提一点，这里实际写代码的时候，还要注意像区间的开闭情况，还有边界值以及索引的编号从 0 还是 1 开始等等细节的地方。&lt;/p&gt;
+&lt;h2&gt;同余定理&lt;/h2&gt;
+&lt;p&gt;严格来说，这个应该算是一个数学方面的小知识，也很容易理解。用一句话描述就是，&lt;strong&gt;给定一个正整数 m，如果两个整数 a 和 b 满足 a-b 能够被 m 整除，即 (a-b)/m 得到一个整数，那么就称整数 a 与 b 对模 m 同余，记作 a≡b(mod m)&lt;/strong&gt;。引申来说，如果 a 对 m 取余，b 也对 m 取余，余数相同的情况下，a-b 是 m 的倍数。&lt;/p&gt;
+&lt;p&gt;写到这里，再结合前缀和，是不是可以发现这个倍数的性质，是可以解决题目当中的倍数问题的。&lt;/p&gt;
+&lt;h2&gt;解题思路&lt;/h2&gt;
+&lt;p&gt;首先，我们计算出给定数组nums的前缀和数组：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;int[] sum = new int[nums.length];
+for (int i = 0; i &amp;lt; nums.length; i++) {
+    sum[i] += nums[i];
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;接下来创建一个哈希表，它的key是某个索引位置的前缀和元素对target取余的结果，value则存储索引位置。&lt;/p&gt;
+&lt;p&gt;然后遍历前缀和数组，拿到每一个前缀和的元素，对目标值target取余，并且把对应索引位置的取余结果通过哈希表存储起来。&lt;/p&gt;
+&lt;p&gt;这个时候就到了核心的部分了，计算完当前前缀和元素 a 对 target 取余的结果，然后从哈希表中找这个余数对应的value是否存在，如果存在，则说明存在之前的前缀和元素 b 与当前前缀和元素是&lt;strong&gt;同余&lt;/strong&gt;（即余数相同）的。结合上面提到的同余定理，a 与 b 的差值一定是 &lt;strong&gt;target 的倍数&lt;/strong&gt;，同时因为 a 与 b 是前缀和元素，结合前缀和的性质，那么他们的差值其实也就是它们对应索引位置之间&lt;strong&gt;连续子数组的和&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;到此，所有逻辑都对上了题目中的要素：连续子数组与target的倍数。我们可以直接写出对应的代码。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;public static int getMinLength(int[] nums, int target){
+    int minLength = Integer.MAX_VALUE;
+    Map&amp;lt;Integer, Integer&amp;gt; map = new HashMap&amp;lt;&amp;gt;();
+    int[] sum = new int[nums.length];
+    for (int i = 0; i &amp;lt; nums.length; i++) {
+        sum[i] += nums[i];
+    }
+    for (int i = 0; i &amp;lt; nums.length; i++) {
+        int s = sum[i] % target;
+        if(map.containsKey(sum)){
+            int index = map.get(sum);
+            minLength = Math.min(minLength, i - index);
+        } else {
+            map.put(sum, i);
+        }
+    }
+    return minLength;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;再次深入分析一下代码，我们发现前缀和的计算过程，可以直接融合在对 target 取余的过程中，这样可以减少一次遍历，并且不用创建前缀和数组。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;public static int getMinLength(int[] nums, int target){
+        int sum = 0;
+        int minLength = Integer.MAX_VALUE;
+        Map&amp;lt;Integer, Integer&amp;gt; map = new HashMap&amp;lt;&amp;gt;();
+        for (int i = 0; i &amp;lt; nums.length; i++) {
+            sum = (sum + nums[i]) % target;
+            if(map.containsKey(sum)){
+                int index = map.get(sum);
+                minLength = Math.min(minLength, i - index);
+            } else {
+                map.put(sum, i);
+            }
+        }
+        return minLength;
+    }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;上面这段代码的时间复杂度降低到了O(n)。&lt;/p&gt;
+&lt;h2&gt;写在最后&lt;/h2&gt;
+&lt;p&gt;整道题下来，可以发现巧妙利用前缀和和同余定理，可以将时间复杂度降低一个数量级。在不断的刷题过程中，其实也接触了不少前缀和的题，但遇到这个题目之后，发现自己的运用还是不够娴熟，也不能很好的结合一些其他的解决方法。所以算法解题是一个不断锤炼自己的思考的过程中，刷题也需要不断沉淀，相同的题也需要不断的反复的去做，才能真正吸收掉它。&lt;/p&gt;
+&lt;p&gt;同时，写题解也是一个很好的方式，可以整理你的思路，更容易加深技巧的理解。坚持刷题前期也是一个很辛苦的事情，如果你因为某种原因需要刷题，那么一起坚持下去吧~最终一定会有收获！&lt;/p&gt;
+</content:encoded><author>Fan Zhou</author></item><item><title>聊聊并发中的死锁</title><link>https://www.fanschou.com/posts/java/concurrent-deadlock/</link><guid isPermaLink="true">https://www.fanschou.com/posts/java/concurrent-deadlock/</guid><description>在高并发的情况中，经常需要考虑的一个问题就是线程之间的死锁问题，并且总结出了很多最佳实践，这篇文章我们就来聊聊导致死锁的原因，以及如何避免产生死锁。</description><pubDate>Tue, 08 Mar 2022 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;在高并发的情况中，经常需要考虑的一个问题就是线程之间的死锁问题，并且总结出了很多最佳实践，这篇文章我们就来聊聊导致死锁的原因，以及如何避免产生死锁。&lt;/p&gt;
+&lt;h2&gt;什么叫死锁&lt;/h2&gt;
+&lt;p&gt;死锁是指两个或两个以上的线程在执行过程中，因争夺资源而造成的互相等待的现象，在无外力作用的情况下，这些线程会一直相互等待而无法继续运行下去。&lt;/p&gt;
+&lt;h2&gt;死锁的产生原因&lt;/h2&gt;
+&lt;p&gt;那么，为什么会产生死锁呢？其实从死锁的现象中，我们就可以归纳出4条原因：&lt;/p&gt;
+&lt;h3&gt;互斥条件&lt;/h3&gt;
+&lt;p&gt;如果两个及以上的线程通过锁争夺同一个资源的使用权，说明该资源同时只能由一个线程占用，并且线程获取到它时进行排他性使用。如果此时还有其它线程请求获取获取该资源，则请求者只能等待，直至占有资源的线程释放该资源。&lt;/p&gt;
+&lt;h3&gt;请求并持有条件&lt;/h3&gt;
+&lt;p&gt;指一个线程己经持有了至少一个资源，但又提出了新的资源请求，而新资源己被其它线程占有，所以当前线程会被阻塞，但阻塞的同时并不释放自己已经获取的资源。&lt;/p&gt;
+&lt;h3&gt;不可剥夺条件&lt;/h3&gt;
+&lt;p&gt;无外力作用的情况下，线程获取到的资源在自己使用完之前不能被其它线程抢占，只有在自己使用完毕后才由自己释放该资源。&lt;/p&gt;
+&lt;h3&gt;环路等待条件&lt;/h3&gt;
+&lt;p&gt;指在发生死锁时，必然存在一个线程——资源的环形链，即线程集合 {T0，T1，T2,…… ，Tn} 中 T0 正在等待一 T1 占用的资源，Tl1正在等待 T2用的资源，…… Tn 在等待己被 T0占用的资源。&lt;/p&gt;
+&lt;h2&gt;如何解除死锁&lt;/h2&gt;
+&lt;p&gt;我们可以看到，只要破坏上面4个条件的任意一个，那么死锁自动就会解除。我们来逐一看一看4个条件。&lt;/p&gt;
+&lt;h3&gt;破坏互斥条件？&lt;/h3&gt;
+&lt;p&gt;互斥这个条件我们没有办法破坏，因为用锁为的就是互斥，如果没有互斥，那么死锁产生的根本就不存在了，没有锁如何死锁？&lt;/p&gt;
+&lt;h3&gt;破坏请求并持有条件&lt;/h3&gt;
+&lt;p&gt;对于&lt;code&gt;请求并持有&lt;/code&gt;这个条件，我们可以一次性请求所有的资源，这样就不会在一个线程获得部分资源之后，有其他线程切入，拿走另一部分资源的锁，也就破坏了请求并持有条件。&lt;/p&gt;
+&lt;h3&gt;破坏不可剥夺条件&lt;/h3&gt;
+&lt;p&gt;对于&lt;code&gt;不可剥夺&lt;/code&gt;这个条件，占用部分资源的线程进一步申请其他资源时，如果申请不到，可以主动释放它占有的资源，这样不可剥夺这个条件就破坏掉了。
+如果了解MySQL的话，它在产生死锁时，会剥夺掉一个连接所持有的锁，释放资源，达到解除死锁的目的。&lt;/p&gt;
+&lt;h3&gt;破坏环路等待条件&lt;/h3&gt;
+&lt;p&gt;对于&lt;code&gt;环路等待&lt;/code&gt;这个条件，可以靠按序申请资源来预防。所谓按序申请，是指资源是有线性顺序的，申请的时候可以先申请资源序号小的，再申请资源序号大的，这样线性化后就不存在环路了。&lt;/p&gt;
+&lt;h2&gt;死锁如何排查&lt;/h2&gt;
+&lt;p&gt;可以使用jdk自带的命令行工具排查：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;使用jps查找运行的Java进程：jps -l&lt;/li&gt;
+&lt;li&gt;使用jstack查看线程堆栈信息：jstack -l 进程id&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;基本就可以看到死锁的信息。&lt;/p&gt;
+</content:encoded><author>Fan Zhou</author></item><item><title>Java并发之synchronized关键字解析</title><link>https://www.fanschou.com/posts/java/concurrent-synchronized/</link><guid isPermaLink="true">https://www.fanschou.com/posts/java/concurrent-synchronized/</guid><description>Java中的synchronized关键字是高并发编程中常用的一个手段，也是找工作时的高频面试题，这篇文章对于synchronized的使用及原理，进行了深入的解析，说明了一些高频面试考点。</description><pubDate>Mon, 07 Mar 2022 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;什么是synchronized&lt;/h2&gt;
+&lt;p&gt;synchronized是JVM提供的一个Java语言的关键字，主要用来实现Java代码的同步，保证多线程情况下代码的原子性。&lt;/p&gt;
+&lt;h2&gt;synchronized常见的使用方式&lt;/h2&gt;
+&lt;p&gt;synchronized按照修饰的对象，主要有三种用法：&lt;/p&gt;
+&lt;h3&gt;修饰实例方法&lt;/h3&gt;
+&lt;p&gt;对一个实例方法进行同步，作用于当前对象实例加锁，进入同步代码前要获得当前对象实例的锁。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;synchronized void method() {
+    //业务代码
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;修饰静态方法&lt;/h3&gt;
+&lt;p&gt;对一个类的静态方法进行同步，也就是给当前类加锁，会作⽤于类的所有对象实例 ，进⼊同步代码前要获得当前 class 的锁。因为静态成员不属于任何⼀个实例对象，是类成员（ static 表明这是该类的⼀个静态资源，不管 new 了多少个对象，只有⼀份）。&lt;/p&gt;
+&lt;p&gt;如果⼀个线程 A 调⽤⼀个实例对象的⾮静态 synchronized ⽅法，⽽线程 B 需要调⽤这个实例对象所属类的静态 synchronized ⽅法，是允许的，不会发⽣互斥现象，因为访问静态 synchronized ⽅法占⽤的锁是当前类的锁，⽽访问⾮静态 synchronized ⽅法占⽤的锁是当前实例对象锁。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;synchronized void staic method() {
+    //业务代码
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;修饰代码块&lt;/h3&gt;
+&lt;p&gt;对大括号内的代码块进行同步，在synchronized后面的括号中指定加锁对象，这里的加锁对象可以是一个实例对象(this|object)，此时需要获取这个实例对象的锁；也可以是一个类(类.class)，此时进入代码块时需要获取对应 class 的锁。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;synchronized(this) {
+    //业务代码
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;synchronized底层原理&lt;/h2&gt;
+&lt;p&gt;由于synchronized是Java语言中提供的关键字，所以它不同于JUC包中的相关锁工具，它直接依赖于JVM的实现，所以需要从JVM层面去研究它的底层原理。&lt;/p&gt;
+&lt;h3&gt;synchronized是怎么加锁的&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;修饰代码块&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;synchronized修饰代码块时，JVM采用&lt;code&gt;monitorenter&lt;/code&gt;、&lt;code&gt;monitorexit&lt;/code&gt;两个指令来实现同步，&lt;code&gt;monitorenter&lt;/code&gt;指令指向同步代码块的开始位置， &lt;code&gt;monitorexit&lt;/code&gt;指令则指向同步代码块的结束位置。
+反编译一段synchronized修饰代码块代码，&lt;code&gt;javap -c -s -v -l SynchronizedDemo.class&lt;/code&gt;，可以看到相应的字节码指令。
+&lt;img src=&quot;https://images.fanschou.com/blog/concurrent-synchronized/20220307_01_001.webp&quot; alt=&quot;monitor&quot; /&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;修饰实例方法&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;synchronized修饰同步方法时，JVM采用&lt;code&gt;ACC_SYNCHRONIZED&lt;/code&gt;标记符来实现同步，这个标识指明了该方法是一个同步方法。&lt;/p&gt;
+&lt;p&gt;同样可以写段代码反编译看一下。
+&lt;img src=&quot;https://images.fanschou.com/blog/concurrent-synchronized/20220307_01_002.webp&quot; alt=&quot;ACC_SYNCHRONIZED&quot; /&gt;&lt;/p&gt;
+&lt;h3&gt;synchronized锁住的是什么&lt;/h3&gt;
+&lt;p&gt;&lt;code&gt;monitorenter&lt;/code&gt;、&lt;code&gt;monitorexit&lt;/code&gt;或者&lt;code&gt;ACC_SYNCHRONIZED&lt;/code&gt;都是基于&lt;code&gt;Monitor&lt;/code&gt;实现的。&lt;/p&gt;
+&lt;p&gt;所谓的Monitor其实是一种同步工具，也可以说是一种同步机制。在Java虚拟机（HotSpot）中，Monitor是由ObjectMonitor实现的，可以叫做内部锁，或者Monitor锁。&lt;/p&gt;
+&lt;p&gt;这段代码是关于ObjectMonitor的定义。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;ObjectMonitor() {
+    _header       = NULL;
+    _count        = 0; // 记录线程获取锁的次数
+    _waiters      = 0,
+    _recursions   = 0;  //锁的重入次数
+    _object       = NULL;
+    _owner        = NULL;  // 指向持有ObjectMonitor对象的线程
+    _WaitSet      = NULL;  // 处于wait状态的线程，会被加入到_WaitSet
+    _WaitSetLock  = 0 ;
+    _Responsible  = NULL ;
+    _succ         = NULL ;
+    _cxq          = NULL ;
+    FreeNext      = NULL ;
+    _EntryList    = NULL ;  // 处于等待锁block状态的线程，会被加入到该列表
+    _SpinFreq     = 0 ;
+    _SpinClock    = 0 ;
+    OwnerIsThread = 0 ;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;ObjectMonitor的工作原理：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;ObjectMonitor有两个队列：_WaitSet、_EntryList，用来保存ObjectWaiter 对象列表。&lt;/li&gt;
+&lt;li&gt;当多个线程同时访问某段同步代码时，首先会进入_EntryList集合&lt;/li&gt;
+&lt;li&gt;当线程获取到对象的monitor之后，就会进入_Owner 区域，并把 ObjectMonitor 对象的_Owner 指向为当前线程，并使_count + 1，如果调用了释放锁（比如 wait）的操作，就会释放当前持有的 monitor ，owner = null，_count - 1，同时这个线程会进入到_WaitSet 列表中等待被唤醒。&lt;/li&gt;
+&lt;li&gt;如果当前线程执行完毕后也会释放 monitor 锁，只不过此时不会进入_WaitSet 列表了，而是直接复位_count 的值。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/concurrent-synchronized/20220307_01_003.webp&quot; alt=&quot;ObjectMonitor的工作原理&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;实例对象结构里有对象头，对象头里面有一块结构叫Mark Word，Mark Word指针指向了monitor。&lt;/p&gt;
+&lt;p&gt;关于Mark Word的结构，我们可以查到官方的说明如下：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/concurrent-synchronized/20220307_01_004.webp&quot; alt=&quot;Mark Word的64位结构&quot; /&gt;
+&lt;img src=&quot;https://images.fanschou.com/blog/concurrent-synchronized/20220307_01_005.webp&quot; alt=&quot;Mark Word的32位结构&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;可以看到Mark Word的结构在64位系统和32位系统下有细微区别，我们以32位的结构为例进行分析。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/concurrent-synchronized/20220307_01_006.webp&quot; alt=&quot;Mark Word的32位结构&quot; /&gt;&lt;/p&gt;
+&lt;h3&gt;锁的优化&lt;/h3&gt;
+&lt;p&gt;在JDK1.6之前，synchronized的实现直接调用ObjectMonitor的enter和exit，这种锁被称之为&lt;strong&gt;重量级锁&lt;/strong&gt;。从JDK6开始，HotSpot虚拟机开发团队对Java中的锁进行优化，如增加了适应性自旋、锁消除、锁粗化、轻量级锁和偏向锁等优化策略，提升了synchronized的性能。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;偏向锁：在无竞争的情况下，只是在Mark Word里存储当前线程指针，CAS操作都不做。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;轻量级锁：在没有多线程竞争时，相对重量级锁，减少操作系统互斥量带来的性能消耗。但是，如果存在锁竞争，除了互斥量本身开销，还额外有CAS操作的开销。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;自旋锁：减少不必要的CPU上下文切换。在轻量级锁升级为重量级锁时，就使用了自旋加锁的方式&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;锁粗化：将多个连续的加锁、解锁操作连接在一起，扩展成一个范围更大的锁。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;锁消除：虚拟机即时编译器在运行时，对一些代码上要求同步，但是被检测到不可能存在共享数据竞争的锁进行消除。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在上面提到的优化中，锁的逐步升级是最常被问到的问题，我们有必要详细的分析一下锁升级的整个过程。
+锁的升级方向：无锁--&amp;gt;偏向锁---&amp;gt; 轻量级锁----&amp;gt;重量级锁，这个方向基本上是不可逆的。&lt;/p&gt;
+&lt;h4&gt;偏向锁&lt;/h4&gt;
+&lt;p&gt;偏向锁的获取：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;判断是否为可偏向状态--MarkWord中锁标志是否为&lt;code&gt;01&lt;/code&gt;，是否偏向锁是否为&lt;code&gt;1&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;如果是可偏向状态，则查看线程ID是否为当前线程，如果是，则进入&lt;code&gt;步骤5&lt;/code&gt;，否则进入&lt;code&gt;步骤3&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;通过CAS操作竞争锁，如果竞争成功，则将MarkWord中线程ID设置为当前线程ID，然后执行&lt;code&gt;步骤5&lt;/code&gt;；竞争失败，则执行&lt;code&gt;步骤4&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;CAS获取偏向锁失败表示有竞争。当达到safepoint时获得偏向锁的线程被挂起，偏向锁升级为轻量级锁，然后被阻塞在安全点的线程继续往下执行同步代码块&lt;/li&gt;
+&lt;li&gt;执行同步代码&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;偏向锁的撤销：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;偏向锁不会主动释放(撤销)，只有遇到其他线程竞争时才会执行撤销，由于撤销需要知道当前持有该偏向锁的线程栈状态，因此要等到safepoint时执行，此时持有该偏向锁的线程（T）有&lt;code&gt;步骤2&lt;/code&gt;，&lt;code&gt;步骤3&lt;/code&gt;两种情况；&lt;/li&gt;
+&lt;li&gt;撤销----T线程已经退出同步代码块，或者已经不再存活，则直接撤销偏向锁，变成无锁状态----该状态达到阈值20则执行批量重偏向&lt;/li&gt;
+&lt;li&gt;升级----T线程还在同步代码块中，则将T线程的偏向锁升级为轻量级锁，当前线程执行轻量级锁状态下的锁获取步骤----该状态达到阈值40则执行批量撤销&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/concurrent-synchronized/20220307_01_007.webp&quot; alt=&quot;偏向锁升级流程&quot; /&gt;&lt;/p&gt;
+&lt;h4&gt;轻量级锁&lt;/h4&gt;
+&lt;p&gt;轻量级锁的获取：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;进行加锁操作时，JVM会判断是否已经时重量级锁，如果不是，则会在当前线程栈帧中划出一块空间，作为该锁的锁记录，并且将锁对象MarkWord复制到该锁记录中&lt;/li&gt;
+&lt;li&gt;复制成功之后，JVM使用CAS操作将对象头MarkWord更新为指向锁记录的指针，并将锁记录里的owner指针指向对象头的MarkWord。如果成功，则执行&lt;code&gt;步骤3&lt;/code&gt;，否则执行&lt;code&gt;步骤4&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;更新成功，则当前线程持有该对象锁，并且对象MarkWord锁标志设置为&lt;code&gt;00&lt;/code&gt;，即表示此对象处于轻量级锁状态&lt;/li&gt;
+&lt;li&gt;更新失败，JVM先检查对象MarkWord是否指向当前线程栈帧中的锁记录，如果是则执行&lt;code&gt;步骤5&lt;/code&gt;，否则执行&lt;code&gt;步骤4&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;表示锁重入；然后当前线程栈帧中增加一个锁记录第一部分（Displaced Mark Word）为null，并指向Mark Word的锁对象，起到一个重入计数器的作用。&lt;/li&gt;
+&lt;li&gt;表示该锁对象已经被其他线程抢占，则进行自旋等待（默认10次），等待次数达到阈值仍未获取到锁，则升级为重量级锁&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/concurrent-synchronized/20220307_01_008.webp&quot; alt=&quot;轻量级锁升级流程&quot; /&gt;&lt;/p&gt;
+&lt;h4&gt;重量级锁&lt;/h4&gt;
+&lt;p&gt;再完整的看一遍到重量级锁的升级
+&lt;img src=&quot;https://images.fanschou.com/blog/concurrent-synchronized/20220307_01_009.webp&quot; alt=&quot;重量级锁升级流程&quot; /&gt;&lt;/p&gt;
+&lt;h4&gt;几种锁状态的对比&lt;/h4&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;锁类型&lt;/th&gt;
+&lt;th&gt;适用场景&lt;/th&gt;
+&lt;th&gt;缺点&lt;/th&gt;
+&lt;th&gt;优点&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;偏向锁&lt;/td&gt;
+&lt;td&gt;适用于只有一个线程访问的同步场景&lt;/td&gt;
+&lt;td&gt;如果存在多个线程竞争使用锁，会带来额外的锁撤销消耗&lt;/td&gt;
+&lt;td&gt;加锁和解锁消耗小&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;轻量级锁&lt;/td&gt;
+&lt;td&gt;适用于追求响应时间的应用场景&lt;/td&gt;
+&lt;td&gt;如果始终得不到资源，会自旋消耗CPU&lt;/td&gt;
+&lt;td&gt;提高程序响应速度&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;重量级锁&lt;/td&gt;
+&lt;td&gt;适用于追求吞吐量的应用场景&lt;/td&gt;
+&lt;td&gt;得不到锁的线程会阻塞，性能比较差&lt;/td&gt;
+&lt;td&gt;阻塞，不需要消耗CPU&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3&gt;synchronized怎么保证可见性&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;线程加锁前，将清空工作内存中共享变量的值，从而使用共享变量时需要从主内存中重新读取最新的值。&lt;/li&gt;
+&lt;li&gt;线程加锁后，其它线程无法获取主内存中的共享变量。&lt;/li&gt;
+&lt;li&gt;线程解锁前，必须把共享变量的最新值刷新到主内存中。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;synchronized怎么保证有序性&lt;/h3&gt;
+&lt;p&gt;synchronized同步的代码块，具有排他性，一次只能被一个线程拥有，所以synchronized保证同一时刻，代码是单线程执行的。
+因为as-if-serial语义的存在，单线程的程序能保证最终结果是有序的，但是不保证不会指令重排。
+所以synchronized保证的有序是&lt;strong&gt;执行结果的有序性&lt;/strong&gt;，而不是防止&lt;strong&gt;指令重排的有序性&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3&gt;synchronized怎么实现可重入的呢&lt;/h3&gt;
+&lt;p&gt;synchronized 是可重入锁，也就是说，允许一个线程二次请求自己持有对象锁的临界资源，这种情况称为可重入锁。
+synchronized 锁对象的时候有个计数器，他会记录下线程获取锁的次数，在执行完对应的代码块之后，计数器就会-1，直到计数器清零，就释放锁了。
+之所以，是可重入的。是因为 synchronized 锁对象有个计数器，会随着线程获取锁后 +1 计数，当线程执行完毕后 -1，直到清零释放锁。&lt;/p&gt;
+&lt;h2&gt;synchronized与ReentrantLock的区别&lt;/h2&gt;
+&lt;p&gt;通过上面的介绍，可以发现synchronized与JUC中的Lock相关工具类具有一定的相似性，我们可以以ReentrantLock为例分析一下两者的区别。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;锁的实现&lt;/strong&gt;： synchronized是Java语言的关键字，基于JVM实现。而ReentrantLock是基于JDK的API层面实现的（一般是lock()和unlock()方法配合try/finally 语句块来完成。）&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;性能&lt;/strong&gt;： 在JDK1.6锁优化以前，synchronized的性能比ReenTrantLock差很多。但是JDK6开始，增加了适应性自旋、锁消除等，两者性能就差不多了。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;功能特点&lt;/strong&gt;： ReentrantLock 比 synchronized 增加了一些高级功能，如等待可中断、可实现公平锁、可实现选择性通知。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;ReentrantLock提供了一种能够中断等待锁的线程的机制，通过lock.lockInterruptibly()来实现这个机制&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;ReentrantLock可以指定是公平锁还是非公平锁。而synchronized只能是非公平锁。所谓的公平锁就是先等待的线程先获得锁。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;synchronized与wait()和notify()/notifyAll()方法结合实现等待/通知机制，ReentrantLock类借助Condition接口与newCondition()方法实现。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;ReentrantLock需要手工声明来加锁和释放锁，一般跟finally配合释放锁。而synchronized不用手动释放锁。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;下面的表格列出出了两种锁之间的区别：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;区别&lt;/th&gt;
+&lt;th&gt;synchronized&lt;/th&gt;
+&lt;th&gt;ReentrantLock&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;锁实现机制&lt;/td&gt;
+&lt;td&gt;对象头监视器模式&lt;/td&gt;
+&lt;td&gt;依赖AQS&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;灵活性&lt;/td&gt;
+&lt;td&gt;不灵活&lt;/td&gt;
+&lt;td&gt;支持响应中断、超时、尝试获取锁&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;释放锁形式&lt;/td&gt;
+&lt;td&gt;自动释放锁&lt;/td&gt;
+&lt;td&gt;显式调用unlock方法&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;支持锁类型&lt;/td&gt;
+&lt;td&gt;非公平锁&lt;/td&gt;
+&lt;td&gt;公平锁&amp;amp;非公平锁&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;条件队列&lt;/td&gt;
+&lt;td&gt;单条件队列&lt;/td&gt;
+&lt;td&gt;多个条件队列&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;可重入支持&lt;/td&gt;
+&lt;td&gt;支持&lt;/td&gt;
+&lt;td&gt;支持&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+</content:encoded><author>Fan Zhou</author></item><item><title>排序算法系列之冒泡排序</title><link>https://www.fanschou.com/posts/algorithm/algorithm-sort-bubble/</link><guid isPermaLink="true">https://www.fanschou.com/posts/algorithm/algorithm-sort-bubble/</guid><description>本篇文章介绍了常见的排序算法——冒泡排序的排序过程，聊一聊它的时间复杂度和稳定性，以及可以对它进行的一些优化。</description><pubDate>Sat, 10 Jul 2021 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;冒泡排序是一个比较经典和简单的排序算法，经典和简单到如果有人让我随便写一个排序算法，我第一时间就会写冒泡排序🤣。今天我们从算法本身、时间复杂度以及稳定性方面来看看冒泡排序，并且思考一下能做怎样的优化。&lt;/p&gt;
+&lt;h2&gt;排序思想&lt;/h2&gt;
+&lt;p&gt;对值的排序，抽象来看，其实做了两个步骤：&lt;strong&gt;比较&lt;/strong&gt; 和 &lt;strong&gt;将值放在正确的位置&lt;/strong&gt;。基于这两点，我们发现「比较」这个动作是所有排序算法都会做的，不同的排序算法之间，他们如何将值放在正确的位置几乎就是核心点。冒泡排序如何将值放在正确的位置呢？&lt;/p&gt;
+&lt;p&gt;首先，冒泡排序的名字就揭示了它的核心思想，就是像水中的鱼吐泡一样，慢慢冒泡上来。我们可以想象，鱼在水中吐泡时，越靠近鱼嘴的地方，泡泡越小，当靠近水面时，泡泡越大。我们借鉴这个思路，将一个待排序的队列中相邻的两个值依次比较，谁比较大，就将它交换到后面的一个位置，当一轮比较之后，我们会发现最大的值自然就会到最后面的位置。我们重复这个过程，每次都会将一个最大的值排到后面，直到最后整个待排序的队列变成有序的。就像冒泡一样，慢慢的把大的泡冒到水面上来。&lt;/p&gt;
+&lt;p&gt;说了这么多抽象的方法，我们接下来借助一个例子演示一下完整的排序过程。&lt;/p&gt;
+&lt;h2&gt;排序过程&lt;/h2&gt;
+&lt;p&gt;假设现在有一个待排序的队列：[4, 5, 3, 1, 8, 7, 6, 9, 2]，我们开始第一轮冒泡，
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_001.webp&quot; alt=&quot;待排序队列&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;首先比较第一对相邻的值[4, 5]，我们发现 5 比 4 大，并且位置也在 4 的后面，保持不动
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_002.webp&quot; alt=&quot;第一次比较&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;第二次比较[5, 3]，我们发现 5 比 3 大，5 的位置在 3 的前面，我们做一次交换，此时的队列变成了[4, 3, 5, 1, 8, 7, 6, 9, 2]
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_003.webp&quot; alt=&quot;第二次比较&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;第三次比较[5, 1]，我们发现 5 比 1 大，5 的位置在 1 的前面，我们做一次交换，此时的队列变成了[4, 3, 1, 5, 8, 7, 6, 9, 2]
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_004.webp&quot; alt=&quot;第三次比较&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;第四次比较[5, 8]，我们发现 8 比 5 大，5 的位置在 8 的前面，保持不动，此时的队列没有变化[4, 3, 1, 5, 8, 7, 6, 9, 2]
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_005.webp&quot; alt=&quot;第四次比较&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;第五次比较[8, 7]，我们发现 8 比 7 大，8 的位置在 7 的前面，我们做一次交换，此时的队列变成了[4, 3, 1, 5, 7, 8, 6, 9, 2]
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_006.webp&quot; alt=&quot;第五次比较&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;第六次比较[8, 6]，我们发现 8 比 6 大，8 的位置在 6 的前面，我们做一次交换，此时的队列变成了[4, 3, 1, 5, 7, 6, 8, 9, 2]
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_007.webp&quot; alt=&quot;第六次比较&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;第七次比较[8, 9]，我们发现 9 比 8 大，8 的位置在 9 的前面，保持不动，此时的队列没有变化[4, 3, 1, 5, 7, 6, 8, 9, 2]
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_008.webp&quot; alt=&quot;第七次比较&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;第八次比较[9, 2]，我们发现 9 比 2 大，9 的位置在 2 的前面，我们做一次交换，此时的队列变成了[4, 3, 1, 5, 7, 6, 8, 2, 9]
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_009.webp&quot; alt=&quot;第八次比较&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;此时我们发现，一轮冒泡比较已经结束，最大的数字 9 以及到了队列的最后，没有比 9 更大的「泡」了。
+我们按照同样的思路进行第二轮冒泡，得到的结果为[3, 1, 4, 5, 6, 7, 2, 8, 9]，
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_010.webp&quot; alt=&quot;第二轮比较&quot; /&gt;
+进行第三轮冒泡，得到的结果为[1, 3, 4, 5, 6, 2, 7, 8, 9]，
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_011.webp&quot; alt=&quot;第三轮比较&quot; /&gt;
+进行第四轮冒泡，得到的结果为[1, 3, 4, 5, 2, 6, 7, 8, 9]，
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_012.webp&quot; alt=&quot;第四轮比较&quot; /&gt;
+进行第五轮冒泡，得到的结果为[1, 3, 4, 2, 5, 6, 7, 8, 9]，
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_013.webp&quot; alt=&quot;第五轮比较&quot; /&gt;
+进行第六轮冒泡，得到的结果为[1, 3, 2, 4, 5, 6, 7, 8, 9]，
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_014.webp&quot; alt=&quot;第六轮比较&quot; /&gt;
+进行第七轮冒泡，得到的结果为[1, 2, 3, 4, 5, 6, 7, 8, 9]，此时队列已经完全有序，排序工作结束。
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_015.webp&quot; alt=&quot;第七轮比较&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;下面我们完整的看一遍动画演示
+&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_016.gif&quot; alt=&quot;完整动画&quot; /&gt;&lt;/p&gt;
+&lt;h2&gt;代码实现&lt;/h2&gt;
+&lt;p&gt;了解了冒泡排序的整个排序过程，我们用代码将它实现一遍&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;public class BubbleSort {
+   public static int[] bubbleSort(int[] arr) {
+       if (arr == null || arr.length &amp;lt; 2) {
+           return arr;
+       }
+       int n = arr.length;
+       for (int i = 0; i &amp;lt; n; i++) {
+           for (int j = 0; j &amp;lt; n; j++) {
+               if (arr[j + 1] &amp;lt; arr[j]) {
+                    int t = arr[j];
+                    arr[j] = arr[j + 1];
+                    arr[j + 1] = t;
+                }
+            }
+        }
+        return arr;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;第一次代码优化&lt;/h3&gt;
+&lt;p&gt;我们仔细观察排序的过程，可以发现一个规律，就是每进行完一轮冒泡，待排序队列的尾部区间会在原本有序的基础上多加一个数。例如，第三轮的中间结果是[1, 3, 4, 5, 6, 2, 7, 8, 9]，此时尾部的[7, 8, 9]是有序的，第四轮的中间结果是[1, 3, 4, 5, 2, 6, 7, 8, 9]，此时尾部的[6, 7, 8, 9]是有序的。也就是说，在第 n 轮，待排序的队列的尾部 &lt;code&gt;n - 1&lt;/code&gt; 个元素已经是有序的了，那么这一轮我们可以不再对这一段进行比较和交换。所以我们可以对上面的代码做出第一次优化。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;public class BubbleSort {
+   public static int[] bubbleSort(int[] arr) {
+       if (arr == null || arr.length &amp;lt; 2) {
+           return arr;
+       }
+       int n = arr.length;
+       for (int i = 0; i &amp;lt; n; i++) {
+           for (int j = 0; j &amp;lt; n - i - 1; j++) {
+               if (arr[j + 1] &amp;lt; arr[j]) {
+                    int t = arr[j];
+                    arr[j] = arr[j + 1];
+                    arr[j + 1] = t;
+                }
+            }
+        }
+        return arr;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;第二次代码优化&lt;/h3&gt;
+&lt;p&gt;经过第一次的优化，我们减少了第二轮循环的次数，继续观察还有什么可以优化的地方。上面的代码，我们认定的是按这种办法全部循环完，则整个队列变得有序，那么有没有一种办法，在没有全部循环完毕，也可以判断出队列已经有序了呢？&lt;/p&gt;
+&lt;p&gt;我们看到循环最主要的目的是将值较大的元素放到后面，那么假如从开始的第一对到结尾的最后一对，相邻的元素之间都没有发生交换的操作，这意味着右边的元素总是大于等于左边的元素，此时的数组已经可以认为是有序的了，我们无需再对剩余的元素重复比较下去了。用这个办法，我们可以不用等待循环全部走完，提前终止循环的过程，我们再对代码做一次优化。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;public class BubbleSort {
+   public static int[] bubbleSort(int[] arr) {
+       if (arr == null || arr.length &amp;lt; 2) {
+           return arr;
+       }
+       int n = arr.length;
+       for (int i = 0; i &amp;lt; n; i++) {
+           boolean flag = true;
+           for (int j = 0; j &amp;lt; n - i - 1; j++) {
+                if (arr[j + 1] &amp;lt; arr[j]) {
+                    flag = false;
+                    int t = arr[j];
+                    arr[j] = arr[j + 1];
+                    arr[j + 1] = t;
+                }
+            }
+            //一趟下来是否发生位置交换
+            if(false)
+                break;
+        }
+        return arr;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;代码优化小结&lt;/h3&gt;
+&lt;p&gt;上面我们对代码做了两次小的优化，简单总结一下就是两个方向：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;降低复杂度：我们通过发现细节，减少循环次数，后面我们可能还能遇到直接减少循环层级的，比如从3层循环降低到2层循环&lt;/li&gt;
+&lt;li&gt;剪枝：对于代码执行链路中的很多分支，如果明确不会发生，或者发生了也无意义，可以采取提前终止的办法，达到一个减去分支的目的，可以有效降低执行效率&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;聊聊冒泡的特性&lt;/h2&gt;
+&lt;p&gt;我在&lt;a href=&quot;https://www.fanschou.com/algorithm/algorithm-sort-opening/&quot;&gt;排序算法系列之开篇&lt;/a&gt;谈到了一些术语，有一些是我们谈及算法时一定会讨论的，如复杂度等，下面我们就几个纬度简单聊聊冒泡的一些特性。&lt;/p&gt;
+&lt;h3&gt;复杂度&lt;/h3&gt;
+&lt;h4&gt;时间复杂度&lt;/h4&gt;
+&lt;p&gt;分析一下冒泡排序的时间复杂度，可以看到最消耗时间的就是中间的两层循环，循环次数分别是 &lt;code&gt;n&lt;/code&gt; 和 &lt;code&gt;n - i - 1&lt;/code&gt;，那总的循环次数就是 &lt;code&gt;n * (n - i - 1)&lt;/code&gt;，把它展开就是 &lt;code&gt;n² - n * i - n&lt;/code&gt;，其中最大的数量级是 n²，其他的项相比平方阶来说都是不在一个数量级的。所以冒泡排序的时间复杂度为O(n²)。&lt;/p&gt;
+&lt;h4&gt;空间复杂度&lt;/h4&gt;
+&lt;p&gt;代码运行过程中，我们只用了一个变量去做中转，交换两个位置的值，所以空间复杂度是O(1)，是常量级的复杂度。&lt;/p&gt;
+&lt;h3&gt;排序的稳定性&lt;/h3&gt;
+&lt;p&gt;冒泡排序算法是一个稳定算法，因为在值相等时，元素的相对位置没有变化。核心的点在于 &lt;code&gt;if (arr[j + 1] &amp;lt; arr[j])&lt;/code&gt; 这个判断，是只有前值大于后值时才会交换，等于时是不会交换的。当然，这里的判断也可以加上等于，就变成了不稳定排序，不过这样改可以但没必要。&lt;/p&gt;
+&lt;h3&gt;排序使用的空间&lt;/h3&gt;
+&lt;p&gt;排序时直接对数组的值进行交换，没有使用多余的存储空间，所以这是一个原地排序&lt;/p&gt;
+&lt;h2&gt;结尾&lt;/h2&gt;
+&lt;p&gt;到这里，就介绍完了有关冒泡排序相关的一些知识，如果你发现文中有任何错误，欢迎通过&lt;a href=&quot;https://www.fanschou.com/author/#%E5%85%B3%E4%BA%8E%E7%AB%99%E7%82%B9&quot;&gt;关于站点&lt;/a&gt;的联系方式进行反馈。&lt;/p&gt;
+</content:encoded><author>Fan Zhou</author></item><item><title>排序算法系列之开篇</title><link>https://www.fanschou.com/posts/algorithm/algorithm-sort-opening/</link><guid isPermaLink="true">https://www.fanschou.com/posts/algorithm/algorithm-sort-opening/</guid><description>本篇文章作为排序算法系列的开篇，主要做一个开篇明义的讲解，介绍了一些关于排序算法的基本术语，有一些概念也是学习任何算法都有益处的知识。同时有了这一篇文章的介绍，后续排序算法系列文章的展开也可以基于此省去一些常用知识的说明。</description><pubDate>Sat, 03 Jul 2021 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;引言&lt;/h2&gt;
+&lt;p&gt;对数据排序可以说是我们编码过程中最常碰到的一种操作了，为此出现了很多不同的排序算法，各有各的特点。从本篇文章开始，会陆续介绍一些常用的排序算法。在开始整个系列之前，我希望先通过这个开篇，介绍一些关于排序算法的一些基本概念，方便读者阅读接下来的文章。&lt;/p&gt;
+&lt;p&gt;为了方便大家理解，我会尽量制作一些动图演示，每篇文章也会给出代码的实现，如有错漏，望各位读者可以给予指正。&lt;/p&gt;
+&lt;h2&gt;基本术语&lt;/h2&gt;
+&lt;h3&gt;复杂度&lt;/h3&gt;
+&lt;p&gt;一般对于算法的复杂度，我们都会从时间复杂度和空间复杂度两个角度去衡量，然而有时候，时间和空间是不可兼得的，我们需要针对具体的情境，在两者之间取得一种平衡。&lt;/p&gt;
+&lt;p&gt;在摩尔定律的加持之下，现代计算机硬件性能得到了极大提升，所以在一般情况下，我们会选择空间换时间的做法，来提高算法的运行效率，如果没有明确提及是哪种复杂度，一般都会默认是时间复杂度。&lt;/p&gt;
+&lt;h4&gt;时间复杂度&lt;/h4&gt;
+&lt;p&gt;时间复杂度用来表示一个算法执行所消耗的时间。那么算法的执行时间如何衡量呢？最简单的办法就是将算法程序跑一遍得到它的运行时间，但是这样会有很多弊端，首先这种方式非常容易受运行环境的影响，机器性能和数据规模的不同都会造成影响，并且，很多时候仅仅只是提出了算法思路，真正的代码还没有实现，此时如何衡量时间复杂度呢？&lt;/p&gt;
+&lt;p&gt;因此，我们采用了一种更通用的表示方式：&lt;strong&gt;「 大O符号表示法 」&lt;/strong&gt;，即 &lt;code&gt;T(n) = O(f(n))&lt;/code&gt; ，也就是在 n 的规模下，算法的时间复杂度为 O(f(n)) 。&lt;/p&gt;
+&lt;p&gt;举一个简单的例子：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;for(i = 1; i &amp;lt;= n; i++)
+{
+   j = i;
+   j++;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;通过 &lt;strong&gt;「大O符号表示法」&lt;/strong&gt; ，这段代码的时间复杂度为：O(n)，为什么是 O(n) 呢？&lt;/p&gt;
+&lt;p&gt;我们可以看到这是一个循环，循环次数是 n ，当 n 的数量加大时，相应的，程序的执行时间也会增长，那么我们可以认为，这段代码的时间复杂度是随着循环次数的增加，而呈现出一种线性增长的态势。到这里我们看出 &lt;strong&gt;「 大O符号表示法 」&lt;/strong&gt; 不是一种精确表示复杂度的计算方式，这里的 &lt;strong&gt;O&lt;/strong&gt; 其实表示的是复杂度与某个基数公式的正比例关系，这个基数公式其实表达的是一种近似的数量级。&lt;/p&gt;
+&lt;p&gt;常见的时间复杂度量级有：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;常数阶O(1)&lt;/li&gt;
+&lt;li&gt;对数阶O(logN)&lt;/li&gt;
+&lt;li&gt;线性阶O(n)&lt;/li&gt;
+&lt;li&gt;线性对数阶O(nlogN)&lt;/li&gt;
+&lt;li&gt;平方阶O(n²)&lt;/li&gt;
+&lt;li&gt;立方阶O(n³)&lt;/li&gt;
+&lt;li&gt;K次方阶O(n^k)&lt;/li&gt;
+&lt;li&gt;指数阶(2^n)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;上面从上至下依次的时间复杂度越来越大，执行的效率越来越低。&lt;/p&gt;
+&lt;p&gt;对于时间复杂度来说，一般比较关注平均时间复杂度和最差时间复杂度，一个表示一般情况下的时间复杂度，一个是表示极端情况下最慢的情况。&lt;/p&gt;
+&lt;h4&gt;空间复杂度&lt;/h4&gt;
+&lt;p&gt;既然时间复杂度不是用来计算程序具体耗时的，那么同理我们也应该知道，空间复杂度也不是用来直接计算程序&lt;strong&gt;实际占用&lt;/strong&gt;的空间的。&lt;/p&gt;
+&lt;p&gt;空间复杂度是对一个算法在运行过程中临时使用存储空间大小的一个量度，同样反映的是一个趋势。&lt;/p&gt;
+&lt;p&gt;我们来看一个交换变量的例子：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;public swap(int a, int b){
+    int temp = a;
+    a = b;
+    b = temp;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;上面的代码将两个变量的值进行了交换，用到了一个新的变量 &lt;code&gt;temp&lt;/code&gt; ，无论这个方法怎么被调用，始终也只会使用这一个变量的空间，那么它的空间复杂度就是O(1)，也就是常数级别的复杂度。&lt;/p&gt;
+&lt;h3&gt;排序的稳定性&lt;/h3&gt;
+&lt;h4&gt;稳定排序&lt;/h4&gt;
+&lt;p&gt;假设给定一个无序的列表，如果 a 原本在 b 的前面，且 a == b，排序之后 a 仍然在 b 的前面，我们称这种排序方式是一个稳定排序。&lt;strong&gt;「 稳定 」&lt;/strong&gt; 指代的是元素相对顺序没有改变。&lt;/p&gt;
+&lt;h4&gt;不稳定排序&lt;/h4&gt;
+&lt;p&gt;对比稳定排序，如果 a 原本在 b 的前面，且 a == b，排序之后 a 可能不在 b 的前面，我们称这种排序方式是一个不稳定排序。&lt;/p&gt;
+&lt;h3&gt;排序使用的空间&lt;/h3&gt;
+&lt;p&gt;从排序是否使用额外的空间，我们也可以分为两种。&lt;/p&gt;
+&lt;h4&gt;原地排序&lt;/h4&gt;
+&lt;p&gt;原地排序就是指在排序过程中不申请多余的存储空间，只利用原来存储待排数据的存储空间进行比较和交换的排序方式。&lt;/p&gt;
+&lt;h4&gt;非原地排序&lt;/h4&gt;
+&lt;p&gt;对比原地排序，非原地排序则需要利用额外的数组来辅助排序。&lt;/p&gt;
+&lt;h3&gt;排序使用的空间位置&lt;/h3&gt;
+&lt;p&gt;从排序使用的空间来源，也可以分成两类&lt;/p&gt;
+&lt;h4&gt;内部排序&lt;/h4&gt;
+&lt;p&gt;排序数据全部记录在内存中进行排序，这种属于内部排序。&lt;/p&gt;
+&lt;h4&gt;外部排序&lt;/h4&gt;
+&lt;p&gt;如果因为排序的数据很大，内存空间一次不能容纳全部的排序记录，在排序过程中需要访问外存，这种就属于外部排序。&lt;/p&gt;
+&lt;h2&gt;排序类别&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;比较排序
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&quot;https://www.fanschou.com/algorithm/algorithm-sort-bubble/&quot;&gt;冒泡排序&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;选择排序（Selection Sort）&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://www.fanschou.com/algorithm/algorithm-insertion-sort/&quot;&gt;插入排序&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;希尔排序（Shell Sort）&lt;/li&gt;
+&lt;li&gt;归并排序（Merge Sort）&lt;/li&gt;
+&lt;li&gt;快速排序（Quick Sort）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;桶排序（Bucket Sort）&lt;/li&gt;
+&lt;li&gt;计数排序（Counting Sort）&lt;/li&gt;
+&lt;li&gt;基数排序（Radix Sort）&lt;/li&gt;
+&lt;li&gt;堆排序（Heap Sort）&lt;/li&gt;
+&lt;/ul&gt;
+</content:encoded><author>Fan Zhou</author></item><item><title>浅谈KMP算法</title><link>https://www.fanschou.com/posts/algorithm/algorithm-string-search-kmp/</link><guid isPermaLink="true">https://www.fanschou.com/posts/algorithm/algorithm-string-search-kmp/</guid><description>Knuth-Morris-Pratt 字符串查找算法（简称为KMP算法）可在一个字符串 S 内查找一个词 W 的出现位置。本文介绍了KMP算法的主要的匹配流程和实现原理，以及它的Java代码实现，并与 JDK 中的 indexOf 方法简单对比了一下。</description><pubDate>Sat, 29 May 2021 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;引言&lt;/h2&gt;
+&lt;p&gt;前段时间在leetcode刷到了一道题——&lt;a href=&quot;https://leetcode-cn.com/problems/implement-strstr/description/&quot;&gt;实现strStr函数&lt;/a&gt;，大概意思是：给你两个字符串 &lt;code&gt;haystack&lt;/code&gt; 和 &lt;code&gt;needle&lt;/code&gt; ，请你在 &lt;code&gt;haystack&lt;/code&gt; 字符串中找出 &lt;code&gt;needle&lt;/code&gt; 字符串出现的第一个位置（下标从 0 开始）。如果不存在，则返回 -1。功能相当于Java类库中 &lt;code&gt;String&lt;/code&gt; 类的 &lt;code&gt;indexOf&lt;/code&gt; 方法。&lt;/p&gt;
+&lt;p&gt;从官方题解中了解到本文题目中的KMP算法，解释的不是特别明白，于是自己去看了一些文章，觉得还是比较巧妙的，应该自己总结一下思路，下面直接开始。&lt;/p&gt;
+&lt;h2&gt;KMP的匹配思路&lt;/h2&gt;
+&lt;h3&gt;算法流程&lt;/h3&gt;
+&lt;p&gt;我们先引入一个例子，有一个字符串 &lt;code&gt;haystack = &quot;BBC ABCDAB ABCDABCDABDE&quot;&lt;/code&gt; ，我们要在它的内部找到一个字符串 &lt;code&gt;needle = &quot;ABCDABD&quot;&lt;/code&gt; 的位置，为了描述方便，我们称字符串 &lt;code&gt;haystack&lt;/code&gt; 为&lt;strong&gt;源字符串&lt;/strong&gt;，称字符串 &lt;code&gt;needle&lt;/code&gt; 为&lt;strong&gt;搜索词&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;首先，&lt;strong&gt;源字符串&lt;/strong&gt;的第一个字符与&lt;strong&gt;搜索词&lt;/strong&gt;的第一个字符，进行比较。因为 B 与 A 不匹配，所以&lt;strong&gt;搜索词&lt;/strong&gt;后移一位。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_001.webp&quot; alt=&quot;比较第一位&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;因为第二个字符 B 与 A 不匹配，&lt;strong&gt;搜索词&lt;/strong&gt;再往后移。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_002.webp&quot; alt=&quot;比较第二位&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;就这样，直到&lt;strong&gt;源字符串&lt;/strong&gt;有一个字符，与&lt;strong&gt;搜索词&lt;/strong&gt;的第一个字符相同为止。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_003.webp&quot; alt=&quot;第一次匹配&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;我们持续比较&lt;strong&gt;源字符串&lt;/strong&gt;和&lt;strong&gt;搜索词&lt;/strong&gt;的字符，直到&lt;strong&gt;源字符串&lt;/strong&gt;有一个字符，与&lt;strong&gt;搜索词&lt;/strong&gt;对应的字符不相同为止。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_004.webp&quot; alt=&quot;匹配失败&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;这时，我们第一反应是和之前一样，依然往后移动一个字符，再从第一个字符开始，逐个往后比较。这样做也是可行的，但是效率比较差，因为有部分位置的字符已经比较过了，我们没有利用上之前已经比较过的结果。&lt;/p&gt;
+&lt;p&gt;那么怎么利用上呢？一个基本事实是，当空格与D不匹配时，你其实知道前面六个字符是&quot;ABCDAB&quot;。KMP算法的想法是，设法利用这个已知信息，可以更大程度的后移，“跳过”已经比较过的字符，这样就提高了效率。&lt;/p&gt;
+&lt;p&gt;我们先假设有一张《部分匹配表》（Partial Match Table）。这张表是如何产生的，&lt;a href=&quot;#%E9%83%A8%E5%88%86%E5%8C%B9%E9%85%8D%E8%A1%A8%E7%9A%84%E4%BA%A7%E7%94%9F&quot;&gt;后面&lt;/a&gt;再介绍，这里暂时先拿来用就可以了。这张表的内容如下：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;搜索词&lt;/th&gt;
+&lt;th&gt;A&lt;/th&gt;
+&lt;th&gt;B&lt;/th&gt;
+&lt;th&gt;C&lt;/th&gt;
+&lt;th&gt;D&lt;/th&gt;
+&lt;th&gt;A&lt;/th&gt;
+&lt;th&gt;B&lt;/th&gt;
+&lt;th&gt;D&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;部分匹配值&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;已知空格与D不匹配时，前面六个字符&quot;ABCDAB&quot;是匹配的。查表可知，最后一个匹配字符B对应的&lt;code&gt;部分匹配值&lt;/code&gt;为2，因此按照下面的公式算出向后移动的位数：&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;移动位数 = 已匹配的字符数 - 对应的部分匹配值&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;计算移动位数 = 6 - 2，得到4，所以将&lt;strong&gt;搜索词&lt;/strong&gt;向后移动4位。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_005.webp&quot; alt=&quot;移位&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;因为空格与Ｃ不匹配，&lt;strong&gt;搜索词&lt;/strong&gt;还要继续往后移。这时，已匹配的字符数为2（&quot;AB&quot;），对应的&lt;code&gt;部分匹配值&lt;/code&gt;为0。所以，移动位数 = 2 - 0，结果为 2，于是将&lt;strong&gt;搜索词&lt;/strong&gt;向后移2位。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_006.webp&quot; alt=&quot;移位&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;因为空格与A不匹配，&lt;strong&gt;搜索词&lt;/strong&gt;继续后移一位。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_007.webp&quot; alt=&quot;移位&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;逐位比较，直到发现C与D不匹配。这时，已匹配的字符数为6（&quot;ABCDAB&quot;），对应的&lt;code&gt;部分匹配值&lt;/code&gt;为2。于是，移动位数 = 6 - 2，继续将&lt;strong&gt;搜索词&lt;/strong&gt;向后移动4位。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_008.webp&quot; alt=&quot;移位&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;逐位比较，直到&lt;strong&gt;搜索词&lt;/strong&gt;的最后一位，发现完全匹配，于是搜索完成。如果还要继续搜索（即找出全部匹配），移动位数 = 7 - 0，再将&lt;strong&gt;搜索词&lt;/strong&gt;向后移动7位，这里就不再重复了。&lt;/p&gt;
+&lt;h3&gt;部分匹配表的产生&lt;/h3&gt;
+&lt;p&gt;下面开始介绍上面的部分匹配表如何产生的，首先我们先来理解两个概念：&lt;code&gt;前缀&lt;/code&gt;和&lt;code&gt;后缀&lt;/code&gt;。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;前缀&lt;/strong&gt;：指除了最后一个字符以外，一个字符串的全部头部组合。以上面的搜索词为例，就是[A,AB,ABC,ABCD,ABCDA,ABCDAB]&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;后缀&lt;/strong&gt;：指除了第一个字符以外，一个字符串的全部尾部组合。以上面的搜索词为例，就是[BCDABD,CDABD,DABD,ABD,BD,D]&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;搜索词&lt;/th&gt;
+&lt;th&gt;A&lt;/th&gt;
+&lt;th&gt;B&lt;/th&gt;
+&lt;th&gt;C&lt;/th&gt;
+&lt;th&gt;D&lt;/th&gt;
+&lt;th&gt;A&lt;/th&gt;
+&lt;th&gt;B&lt;/th&gt;
+&lt;th&gt;D&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;部分匹配值&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;我们再来看上面那张部分匹配表，&lt;code&gt;部分匹配值&lt;/code&gt;就是&lt;code&gt;前缀&lt;/code&gt;和&lt;code&gt;后缀&lt;/code&gt;的最长的共有元素的长度。如何理解呢？我们还是以上面的搜索词为例：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;- &quot;A&quot;的前缀和后缀都为空集，共有元素的长度为0；
+- &quot;AB&quot;的前缀为[A]，后缀为[B]，共有元素的长度为0；
+- &quot;ABC&quot;的前缀为[A, AB]，后缀为[BC, C]，共有元素的长度0；
+- &quot;ABCD&quot;的前缀为[A, AB, ABC]，后缀为[BCD, CD, D]，共有元素的长度为0；
+- &quot;ABCDA&quot;的前缀为[A, AB, ABC, ABCD]，后缀为[BCDA, CDA, DA, A]，共有元素为&quot;A&quot;，长度为1；
+- &quot;ABCDAB&quot;的前缀为[A, AB, ABC, ABCD, ABCDA]，后缀为[BCDAB, CDAB, DAB, AB, B]，共有元素为&quot;AB&quot;，长度为2；
+- &quot;ABCDABD&quot;的前缀为[A, AB, ABC, ABCD, ABCDA, ABCDAB]，后缀为[BCDABD, CDABD, DABD, ABD, BD, D]，共有元素的长度为0。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;我们可以看出，以搜索词的开头到当前字符作为一个子串，然后以这个子串的&lt;code&gt;前缀&lt;/code&gt;和&lt;code&gt;后缀&lt;/code&gt;的最长的共有元素的长度作为当前位置的部分匹配值。&lt;/p&gt;
+&lt;p&gt;那么，为什么可以利用部分匹配值跳过一串已匹配的字符串呢？其实，&quot;部分匹配&quot;的实质是，有时候，搜索词头部和尾部会有重复。比如，&quot;ABCDAB&quot;之中有两个&quot;AB&quot;，那么它的&lt;code&gt;部分匹配值&lt;/code&gt;就是2（&quot;AB&quot;的长度）。&lt;strong&gt;搜索词&lt;/strong&gt;移动的时候，第一个&quot;AB&quot;向后移动4位（字符串长度-部分匹配值），就可以来到第二个&quot;AB&quot;的位置，此时，我们可以保证至少在前两个字符内，&lt;strong&gt;源字符串&lt;/strong&gt;和&lt;strong&gt;搜索词&lt;/strong&gt;是匹配的，跳过了一些根本不可能匹配上的字符。&lt;/p&gt;
+&lt;h3&gt;动图展示&lt;/h3&gt;
+&lt;p&gt;下面我们通过一张动图展示整个过程&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_010.gif&quot; alt=&quot;动图展示&quot; /&gt;&lt;/p&gt;
+&lt;h3&gt;代码实现&lt;/h3&gt;
+&lt;p&gt;经过上面的分析，我们再来应用KMP算法来实现一下&lt;a href=&quot;#%E5%BC%95%E8%A8%80&quot;&gt;引言&lt;/a&gt;中提到的 &lt;code&gt;strStr&lt;/code&gt; 函数。基本思路就是先使用&lt;strong&gt;搜索词&lt;/strong&gt;生成一个部分匹配表，然后依据这个部分匹配表进行搜索，代码如下：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;public int strStr(String haystack, String needle) {
+    if(needle.length() == 0){
+        return 0;
+    }
+
+    int h = haystack.length();
+    int n = needle.length();
+    int[] pmt = new int[n];
+
+    for (int i = 1, j = 0; i &amp;lt; n; i++) {
+        while(j &amp;gt; 0 &amp;amp;&amp;amp; needle.charAt(i) != needle.charAt(j)){
+            j = pmt[j - 1];
+        }
+        if(needle.charAt(i) == needle.charAt(j)){
+            j++;
+        }
+
+        pmt[i] = j;
+    }
+
+    for (int i = 0, j = 0; i &amp;lt; h; i++) {
+        while(j &amp;gt; 0 &amp;amp;&amp;amp; haystack.charAt(i) != needle.charAt(j)){
+            j = pmt[j - 1];
+        }
+        if(haystack.charAt(i) == needle.charAt(j)){
+            j++;
+        }
+
+        if(j == n){
+            return i - n + 1;
+        }
+    }
+
+    return -1;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;结尾&lt;/h2&gt;
+&lt;p&gt;依据KMP算法实现并提交代码之后，leetcode很快就执行通过了，看到执行时间，想着KMP算法还是比较精妙的嘛。此时，我突然想起来我刚开始刷leetcode的时候，是按题序刷的（刷过的应该知道，题目难度是忽上忽下），刷过这道题并且实现也比较粗暴，是直接调用Java类库String的indexOf方法解决的，于是我打开了提交记录，&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_009.webp&quot; alt=&quot;leetcode提交记录&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;我很惊奇，因为上次提交的比这次还要快。我就升起了好奇心，JDK源码究竟是如何实现的呢？于是乎，我点开了JDK的源码：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;static int indexOf(char[] source, int sourceOffset, int sourceCount,
+        char[] target, int targetOffset, int targetCount,
+        int fromIndex) {
+    if (fromIndex &amp;gt;= sourceCount) {
+        return (targetCount == 0 ? sourceCount : -1);
+    }
+    if (fromIndex &amp;lt; 0) {
+        fromIndex = 0;
+    }
+    if (targetCount == 0) {
+        return fromIndex;
+    }
+
+    char first = target[targetOffset];
+    int max = sourceOffset + (sourceCount - targetCount);
+
+    for (int i = sourceOffset + fromIndex; i &amp;lt;= max; i++) {
+        /* Look for first character. */
+        if (source[i] != first) {
+            while (++i &amp;lt;= max &amp;amp;&amp;amp; source[i] != first);
+        }
+
+        /* Found first character, now look at the rest of v2 */
+        if (i &amp;lt;= max) {
+            int j = i + 1;
+            int end = j + targetCount - 1;
+            for (int k = targetOffset + 1; j &amp;lt; end &amp;amp;&amp;amp; source[j]
+                    == target[k]; j++, k++);
+
+            if (j == end) {
+                /* Found whole string. */
+                return i - sourceOffset;
+            }
+        }
+    }
+    return -1;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;嗯……暴力循环，果然，功夫再高，也怕菜刀:)&lt;/p&gt;
+</content:encoded><author>Fan Zhou</author></item><item><title>kafka安装配置</title><link>https://www.fanschou.com/posts/install/kafka-install-steps/</link><guid isPermaLink="true">https://www.fanschou.com/posts/install/kafka-install-steps/</guid><description>本文是记录自己在学习 kafka 时第一次进行开发环境搭建时踩过的一些坑，写成一个安装教程，方便以后再次搭建开发环境的时候进行查看，安装教程主要以 Windows 系统进行演示，但 Linux 下大体相同。</description><pubDate>Tue, 25 Sep 2018 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;准备工作&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;安装资料下载
+&lt;ul&gt;
+&lt;li&gt;kafka安装包，来自&lt;a href=&quot;http://kafka.apache.org/downloads&quot;&gt;kafka官方下载&lt;/a&gt;，可以自行选择版本
+&lt;img src=&quot;https://images.fanschou.com/blog/kafka-install-steps/20180424_01_001.webp&quot; alt=&quot;kafka官方下载&quot; /&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;开始安装&lt;/h2&gt;
+&lt;p&gt;以下安装是在Windows系统下执行，Linux系统类似的做调整即可&lt;/p&gt;
+&lt;h3&gt;配置修改&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;解压缩下载的安装包到本地，开始修改配置
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;server.properties&lt;/code&gt;在根目录的config文件夹下
+log.dirs=修改为你所使用系统的路径
+例如Windows下：D:/Dependency/kafka_2.12-1.1.0/logs/kafka-logs&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;zookeeper.properties&lt;/code&gt;在根目录的config文件夹下
+dataDir=修改为你所使用系统的路径
+例如Windows下：D:/Dependency/kafka_2.12-1.1.0/logs/zookeeper-logs&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;以上修改的两个文件主要是可能会引起启动问题的配置，至于端口等设置可随意调整，此处选择默认端口号即可&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;启动文件修改&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;在根目录下找到bin/windows文件夹，用文本编辑器修改&lt;code&gt;kafka-run-class.bat&lt;/code&gt;文件
+&lt;img src=&quot;https://images.fanschou.com/blog/kafka-install-steps/20180424_01_002.webp&quot; alt=&quot;kafka-run-class&quot; /&gt;
+我从官网下载的是编译好的安装包，在这个文件里留有一些问题，由于安装包已经编译好，其实上面对文件夹很多的扫描是没有必要的，我在安装之后的启动过程中报了一下找不到主类的错误，琢磨了很久，将上面对一些无效文件夹的扫描全部删除掉，遂解决了报错的问题。但我不能完全确定是否是因为这个导致报错，如果有出现类似的错误，可以试着操作一下。
+另外一个问题就是，Windows下的环境变量配置的时候，有些目录是带有空格的，这个也会导致报错，典型的就是如果JDK安装在C盘的Program Files下时的JAVA_HOME配置
+&lt;img src=&quot;https://images.fanschou.com/blog/kafka-install-steps/20180424_01_003.webp&quot; alt=&quot;kafka-run-class&quot; /&gt;
+这里将%CLASSPATH%外面加上双引号，用来解决这种情况&lt;/li&gt;
+&lt;li&gt;这里再多说一句，早前的kafka版本需要额外下载一个zookeeper，用来运行kafka，现在新的版本已经自带了一个zookeeper的server，直接启动即可。后面在启动服务时也会提到。
+到这里，配置的问题基本解决了，下面开始启动服务&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;启动服务&lt;/h3&gt;
+&lt;p&gt;此处仍以Windows下的操作为例，Linux下所不同的是执行shell脚本而非批处理文件。&lt;/p&gt;
+&lt;p&gt;首先进入到你解压的kafka根目录&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;启动zookeeper&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;./bin/windows/zookeeper-server-start.bat ./config/zookeeper.properties
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;启动kafka&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;./bin/windows/kafka-server-start.bat ./config/server.properties
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;创建topic，这里命名为test&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;./bin/windows/kafka-topics.bat --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic test
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;启动生产者客户端&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;./bin/windows/kafka-console-producer.bat --broker-list localhost:9092 --topic test
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;启动消费者客户端&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;./bin/windows/kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic test --from-beginning This is a message
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;PS：最开始，我是单独下载zookeeper配置的server，在启动消费者客户端时会发生报错，但是依旧可以完成发送和订阅的操作，也把启动命令记在下面&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;./bin/windows/kafka-console-consumer.bat --zookeeper localhost:2181 --topic test
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;接下来就可以在第4步打开的客户端上输入信息并回车，再进入第5步打开的客户端上查看是否收到了订阅&lt;/p&gt;
+&lt;p&gt;如果可以收到信息，那么这部分的环境搭建已经完成&lt;/p&gt;
+</content:encoded><author>Fan Zhou</author></item><item><title>Hexo安装部署与同步</title><link>https://www.fanschou.com/posts/install/hexo-install-steps/</link><guid isPermaLink="true">https://www.fanschou.com/posts/install/hexo-install-steps/</guid><description>本文介绍了如何安装 Hexo 生成静态博客，以及如何将生成的静态博客部署 Github Pages 上供外部访问。同时我们利用 Github 的仓库进行静态网页和博客书写环境的同步，方便在不同的写作环境中进行切换。</description><pubDate>Thu, 16 Aug 2018 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;前言&lt;/h2&gt;
+&lt;p&gt;Hexo 是一个快速、简洁且高效的博客框架。Hexo 使用 &lt;a href=&quot;http://daringfireball.net/projects/markdown/&quot;&gt;Markdown&lt;/a&gt;（或其他渲染引擎）解析文章，在几秒内，即可利用靓丽的主题生成静态网页。&lt;/p&gt;
+&lt;p&gt;为了适应在多个设备切换进行博客书写的要求，利用 Github 仓库的分支分别存储 Hexo 源文件和发布出去的静态网页，这样只需在不同设备上将源文件分支同步之后，即可直接进行修改源文件进行发布，同时修改的源文件也可以提交到仓库的分支上。&lt;/p&gt;
+&lt;h2&gt;安装&lt;/h2&gt;
+&lt;h3&gt;安装前提&lt;/h3&gt;
+&lt;p&gt;安装 Hexo 相当简单。然而在安装前，你必须检查电脑中是否已安装下列应用程序：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&quot;https://nodejs.org/zh-cn/&quot;&gt;Node.js&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://git-scm.com/&quot;&gt;Git&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果你的电脑中已经安装上述必备程序，那么接下来只需要使用 npm 即可完成 Hexo 的安装。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;npm install -g hexo
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;如果你的电脑中尚未安装所需要的程序，请根据以下安装指示完成安装。&lt;/p&gt;
+&lt;h3&gt;安装 Git&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Windows：点击上面的链接去官网下载后进行安装，记住在安装的选项中勾选&lt;strong&gt;Add to PATH&lt;/strong&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Linux (Ubuntu, Debian)：&lt;code&gt;sudo apt-get install git-core&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Linux (Fedora, Red Hat, CentOS)：&lt;code&gt;sudo yum install git-core&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;安装 Node.js&lt;/h3&gt;
+&lt;p&gt;可以直接下载 &lt;a href=&quot;https://nodejs.org/zh-cn/&quot;&gt;安装程序&lt;/a&gt; 来安装。&lt;/p&gt;
+&lt;p&gt;对于在Windows上安装的用户来说，和Git一样记住在安装的选项中勾选&lt;strong&gt;Add to PATH&lt;/strong&gt;选项。&lt;/p&gt;
+&lt;h3&gt;安装 Hexo&lt;/h3&gt;
+&lt;p&gt;所有必备的应用程序安装完成后，即可使用 npm 安装 Hexo。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;npm install -g hexo
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;然后输入命令&lt;code&gt;hexo -v&lt;/code&gt;，回车后输出hexo的版本号即为安装成功&lt;/p&gt;
+&lt;h2&gt;部署&lt;/h2&gt;
+&lt;p&gt;以下内容皆是在Windows环境下的操作。&lt;/p&gt;
+&lt;h3&gt;Github准备&lt;/h3&gt;
+&lt;p&gt;博客是在&lt;a href=&quot;https://github.com/&quot;&gt;Github&lt;/a&gt;上托管维护的，所以当然需要一个Github的账号了。我的Github账号是FansChou，所以我创建的仓库名字就是&lt;code&gt;FansChou.github.io&lt;/code&gt;。这里账号的大小写有没有影响，我没有试验，根据我的观察应该是不影响的。&lt;/p&gt;
+&lt;p&gt;建仓库时，名字固定为 &lt;code&gt;你的账号.github.io&lt;/code&gt; 这样的形式，至于为什么是这种形式，是因为 Github Pages 提供了2种类型的页面&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;一种是 &lt;code&gt;Project Pages&lt;/code&gt; ，用来作为代码仓库的一个静态页面说明，这个是每个代码仓库都是可以有一个的&lt;/li&gt;
+&lt;li&gt;一种是 &lt;code&gt;User Pages&lt;/code&gt; ，是提供给整个账号的，每个账号有且只有一个，是可以直接通过&lt;code&gt;你的账号.github.io&lt;/code&gt;去这个地址去访问网页的，所以必须写成上面的那种格式。我们要部署的就是后一种的 &lt;code&gt;User Pages&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;除此之外， 要想使用Git进行与远程仓库的交互，还需要一些配置，这些知识可以去网上搜索学习，这里只列出我们需要的。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;首先，设定本地的邮箱和用户名&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;git config --global user.email xxx@gmail.com
+git config --global user.name xxx
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;然后生成SSH公钥&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;cd c:/user/fans/.ssh
+ssh-keygen -t rsa -C xxx@gmail.com
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这里需要说明两件事：首先生成公钥的时候，最好进入当前用户的 &lt;code&gt;.ssh&lt;/code&gt; 目录下，再去生成，第一次试的时候，在其他地方生成的，最后进行同步的时候找不到公钥；另外就是最后的公钥名称要以 &lt;code&gt;id_&lt;/code&gt; 开头，这个比较奇怪，最开始我起了一个hexo的名字，同步的时候同样报找不到公钥，也是很郁闷，最后还是改成了 &lt;code&gt;id_rsa&lt;/code&gt; ，没什么特殊要求的话，还是不作妖了，哈哈~&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;添加SSH公钥到Github账户&lt;/p&gt;
+&lt;p&gt;将 &lt;code&gt;.ssh&lt;/code&gt; 目录下的 &lt;code&gt;id_rsa.pub&lt;/code&gt; 文件用 VS CODE 打开，复制里面的内容。登陆Github，选择settings － SSH keys  － add ssh keys，然后把复制的内容全部粘贴进去即可&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3&gt;初始化&lt;/h3&gt;
+&lt;p&gt;经过以上的步骤，准备工作算是做好了，接下来就是初始化一个Hexo环境。&lt;/p&gt;
+&lt;p&gt;因为要使用 Github 进行同步，所以接下来先将建好的仓库clone一份到本地。找到之前建好的仓库地址，进行clone&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;git clone git@github.com:FansChou/FansChou.github.io.git
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;clone的地方会有一个文件夹生成，名字和仓库名一样 &lt;code&gt;FansChou.github.io&lt;/code&gt; 。&lt;/p&gt;
+&lt;p&gt;然后，使用 Hexo 进行初始化，在你本地新建一个文件夹，进入之后，右键选择 &lt;code&gt;Git Bash Here&lt;/code&gt; 进入命令行：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;hexo init
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;将刚刚生成的文件拷贝至从仓库clone生成的文件夹 &lt;code&gt;FansChou.github.io&lt;/code&gt; 里面。&lt;/p&gt;
+&lt;p&gt;这里之所以不直接在 &lt;code&gt;FansChou.github.io&lt;/code&gt; 生成hexo源文件，是因为在执行hexo命令的时候要求所在目录是一个空文件夹。&lt;/p&gt;
+&lt;p&gt;最后我们生成静态文件并在本地启动：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;hexo g
+hexo s
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这个时候我们进入浏览器访问 http://localhost:4000 就可以进入hexo主页面了，此时的首页应该是一个Helloworld页面。&lt;/p&gt;
+&lt;h3&gt;同步博客源文件&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;如果你没有使用Github进行源文件同步的打算，那么请直接进入下一节进行发布吧！&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;这个时候本地已经可以预览到博客的界面了，接下来就是利用 Github 去同步 Hexo 的源文件。这里的做法是建立2个分支，一个是master，一个是source，master分支用来发布生成的静态网页，source则用来同步 Hexo 的源文件。&lt;/p&gt;
+&lt;p&gt;建好仓库后默认会有一个master分支，我们先创建一个source分支。&lt;/p&gt;
+&lt;p&gt;首先进入&lt;code&gt;FansChou.github.io&lt;/code&gt;文件夹，右键选择 &lt;code&gt;Git Bash Here&lt;/code&gt; 进入命令行，创建并切换到source分支：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;git checkout -b source
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;将新分支推送给Github：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;git push origin source
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这个时候登录Github去看你的仓库，会发现多了一个source的分支，建议把它设置为默认分支，因为后续的Git提交都是针对这个分支的。master分支作为静态网页的存放地点，一般不会直接用Git命令去提交，而是通过hexo插件去一次性部署提交。&lt;/p&gt;
+&lt;p&gt;然后我们把本地的源文件全部提交进仓库的source分支，在执行Git命令之前，请务必确认本地处于source分支下，&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;git add .
+git commit -m &quot;首次提交&quot; #提交注释
+git push origin source
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;现在远程仓库的source分支上就有了你的源文件，当你之后需要切换另一个设备进行博客撰写的时候，可以直接由仓库进行clone。&lt;/p&gt;
+&lt;h3&gt;发布博客&lt;/h3&gt;
+&lt;p&gt;接下来就是将发布博客到 Github Pages 上。&lt;/p&gt;
+&lt;p&gt;发布之前先修改 &lt;code&gt;FansChou.github.io/_config.yml&lt;/code&gt;文件中的&lt;code&gt;deploy&lt;/code&gt;标签：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;deploy:
+    type: git
+    repository: git@github.com:FansChou/FansChou.github.io.git
+    branch: master
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;repository换成你自己的仓库地址，branch默认是master，然后在&lt;code&gt;Git Bash Here&lt;/code&gt;命令行里面安装deploy插件：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;npm install hexo-deployer-git --save
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;进行generate生成静态文件并提交：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;hexo deploy -g
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;提交完成之后就可以直接用&lt;code&gt;你的账号.github.io&lt;/code&gt;去访问你的博客网站啦！&lt;/p&gt;
+&lt;h2&gt;撰写博客&lt;/h2&gt;
+&lt;h2&gt;新建文章&lt;/h2&gt;
+&lt;p&gt;这里只简单介绍一下如何新建一篇文章，具体的一些使用，可以直接去&lt;a href=&quot;https://hexo.io/zh-cn/docs/&quot;&gt;Hexo的官方文档&lt;/a&gt;去学习。&lt;/p&gt;
+&lt;p&gt;执行新建文章命令：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;hexo n &quot;文章名称&quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这个时候在&lt;code&gt;FansChou.github.io/source/_posts&lt;/code&gt;就会有一个&lt;code&gt;文章名称.md&lt;/code&gt;的文件，直接进行编辑，然后重新generate发布即可。&lt;/p&gt;
+</content:encoded><author>Fan Zhou</author></item></channel></rss>

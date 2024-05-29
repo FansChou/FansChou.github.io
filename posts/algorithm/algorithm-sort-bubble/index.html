@@ -1,0 +1,165 @@
+<!DOCTYPE html><html lang="en"> <head><meta name="viewport" content="width=device-width"><meta name="generator" content="Astro v4.9.2"><link rel="sitemap" href="/sitemap-index.xml"><title>排序算法系列之冒泡排序</title><meta charset="utf-8"><link rel="canonical" href="https://www.fanschou.com/posts/algorithm/algorithm-sort-bubble/"><meta name="description" content="本篇文章介绍了常见的排序算法——冒泡排序的排序过程，聊一聊它的时间复杂度和稳定性，以及可以对它进行的一些优化。"><meta name="robots" content="index, follow"><meta property="og:title" content="排序算法系列之冒泡排序"><meta property="og:type" content="article"><meta property="og:image" content="https://www.fanschou.com/placeholder.png"><meta property="og:url" content="https://www.fanschou.com"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta name="twitter:image:src" content="https://www.fanschou.com/placeholder.png"><meta name="twitter:image:alt" content="本篇文章介绍了常见的排序算法——冒泡排序的排序过程，聊一聊它的时间复杂度和稳定性，以及可以对它进行的一些优化。"><meta name="twitter:creator"><meta name="twitter:site"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="排序算法系列之冒泡排序"><meta name="twitter:description" content="本篇文章介绍了常见的排序算法——冒泡排序的排序过程，聊一聊它的时间复杂度和稳定性，以及可以对它进行的一些优化。"><!-- Katex --><link rel="stylesheet" href="/_astro/about.CKOrui31.css">
+<link rel="stylesheet" href="/_astro/about.Q2hPb40S.css">
+<style>.tk-meta-input{background-color:#fff}.code-container{position:relative}.clipboard-copy{position:absolute;top:.5rem;right:.5rem;width:1.75rem;height:1.75rem;display:flex;justify-content:center;align-items:center;border-radius:.25rem}.clipboard-copy:hover{background-color:#30363d}
+</style><script type="module" src="/_astro/hoisted.C1FqLlVV.js"></script>
+<script type="module" src="/_astro/page.DFwqf4PB.js"></script></head> <body> <div un-max-lg="animate-fadein-down" un-lg="flex flex-row-reverse justify-between gap-4 px-8 mx-auto max-w-6xl" class="container contain-layout m-a"> <div un-lg="sticky top-0 h-screen py-20 animate-fadein-left gap-8" un-lg:flex="~ col justify-between items-start gap-4" class="p-7.5"> <header un-lg="grow-1 justify-between items-start" un-flex="~ col gap-2.5" class="text-center"> <hgroup un-hover:lg="bg-foreground color-background pt-3.75 pb-8.75 " un-lg=" write-vertical-right items-start px-2.5 pb-12 b-l-2px b-l-foreground-solid text-left" un-flex="~ col gap-2.5" class="cursor-pointer transition-[padding,background] duration-800 ease-in-out"> <a class="normal" href="/"> <h3 class="text-5 font-extrabold font-serif">Fan Zhou</h3> <h1 class="text-8 font-extrabold font-serif">六脉神间</h1> </a> </hgroup> <nav class="text-center font-bold" un-flex="~ col gap-2"> <ul un-lg="flex-col items-start text-4" class="text-3.5" un-flex="~ row gap-2 justify-center"> <li> <a href="/posts/page/1">文章</a> </li><li> <a href="/archive">归档</a> </li><li> <a href="/tags">标签</a> </li><li> <a href="/about">关于</a> </li> </ul> <ul un-flex="~ row gap-1 justify-center"> <li> <a href="https://github.com/FansChou" target="_blank" title="github" class="icon i-mdi-github"></a> </li><li> <a href="/rss.xml" target="_blank" title="rss" class="icon i-mdi-rss"></a> </li> </ul> </nav> </header> <footer font-bold text-3 un-flex="~ col gap-1" un-lg="gap-3.5" class="max-lg:hidden"> <p>
+© 2024 <a target="_blank" href="https://www.fanschou.com" rel="noopener noreferrer">Fan Zhou</a> </p> <p> <a target="_blank" href="https://beian.miit.gov.cn/">皖ICP备2021007904号</a> </p> <p> <a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490"> <img src="https://images.fanschou.com/blog/site/beian_gongan.webp" alt="备案" style="float:left;">皖公网安备 34180202000490号
+</a> </p> <!-- <p>
+    Theme
+    <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography" rel="noopener noreferrer">Typography</a>
+      by <a target="_blank" href="https://moeyua.com" rel="noopener noreferrer">Moeyua</a>
+  </p>
+  <p>
+    Proudly published with
+    <a target="_blank" href="https://astro.build" rel="noopener noreferrer">Astro</a>
+  </p> --> </footer> </div> <main un-lg="py-20 min-w-xl animate-fadein-down" class="p-7.5">  <article class="heti"> <header> <h1 class="post-title!"> <a href="/posts/algorithm/algorithm-sort-bubble/">排序算法系列之冒泡排序</a> </h1> <div class="mt-2 text-3.5"> <span>发布于</span> <time>2021-07-10</time> <span>更新于</span><time>2021-07-10</time> <a class="ml-2.5" href="/tags/sort-algorithm">
+# 排序算法 </a>  </div> </header>  <p>冒泡排序是一个比较经典和简单的排序算法，经典和简单到如果有人让我随便写一个排序算法，我第一时间就会写冒泡排序🤣。今天我们从算法本身、时间复杂度以及稳定性方面来看看冒泡排序，并且思考一下能做怎样的优化。</p>
+<h2 id="排序思想">排序思想</h2>
+<p>对值的排序，抽象来看，其实做了两个步骤：<strong>比较</strong> 和 <strong>将值放在正确的位置</strong>。基于这两点，我们发现「比较」这个动作是所有排序算法都会做的，不同的排序算法之间，他们如何将值放在正确的位置几乎就是核心点。冒泡排序如何将值放在正确的位置呢？</p>
+<p>首先，冒泡排序的名字就揭示了它的核心思想，就是像水中的鱼吐泡一样，慢慢冒泡上来。我们可以想象，鱼在水中吐泡时，越靠近鱼嘴的地方，泡泡越小，当靠近水面时，泡泡越大。我们借鉴这个思路，将一个待排序的队列中相邻的两个值依次比较，谁比较大，就将它交换到后面的一个位置，当一轮比较之后，我们会发现最大的值自然就会到最后面的位置。我们重复这个过程，每次都会将一个最大的值排到后面，直到最后整个待排序的队列变成有序的。就像冒泡一样，慢慢的把大的泡冒到水面上来。</p>
+<p>说了这么多抽象的方法，我们接下来借助一个例子演示一下完整的排序过程。</p>
+<h2 id="排序过程">排序过程</h2>
+<p>假设现在有一个待排序的队列：[4, 5, 3, 1, 8, 7, 6, 9, 2]，我们开始第一轮冒泡，
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_001.webp" alt="待排序队列"></p>
+<p>首先比较第一对相邻的值[4, 5]，我们发现 5 比 4 大，并且位置也在 4 的后面，保持不动
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_002.webp" alt="第一次比较"></p>
+<p>第二次比较[5, 3]，我们发现 5 比 3 大，5 的位置在 3 的前面，我们做一次交换，此时的队列变成了[4, 3, 5, 1, 8, 7, 6, 9, 2]
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_003.webp" alt="第二次比较"></p>
+<p>第三次比较[5, 1]，我们发现 5 比 1 大，5 的位置在 1 的前面，我们做一次交换，此时的队列变成了[4, 3, 1, 5, 8, 7, 6, 9, 2]
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_004.webp" alt="第三次比较"></p>
+<p>第四次比较[5, 8]，我们发现 8 比 5 大，5 的位置在 8 的前面，保持不动，此时的队列没有变化[4, 3, 1, 5, 8, 7, 6, 9, 2]
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_005.webp" alt="第四次比较"></p>
+<p>第五次比较[8, 7]，我们发现 8 比 7 大，8 的位置在 7 的前面，我们做一次交换，此时的队列变成了[4, 3, 1, 5, 7, 8, 6, 9, 2]
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_006.webp" alt="第五次比较"></p>
+<p>第六次比较[8, 6]，我们发现 8 比 6 大，8 的位置在 6 的前面，我们做一次交换，此时的队列变成了[4, 3, 1, 5, 7, 6, 8, 9, 2]
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_007.webp" alt="第六次比较"></p>
+<p>第七次比较[8, 9]，我们发现 9 比 8 大，8 的位置在 9 的前面，保持不动，此时的队列没有变化[4, 3, 1, 5, 7, 6, 8, 9, 2]
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_008.webp" alt="第七次比较"></p>
+<p>第八次比较[9, 2]，我们发现 9 比 2 大，9 的位置在 2 的前面，我们做一次交换，此时的队列变成了[4, 3, 1, 5, 7, 6, 8, 2, 9]
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_009.webp" alt="第八次比较"></p>
+<p>此时我们发现，一轮冒泡比较已经结束，最大的数字 9 以及到了队列的最后，没有比 9 更大的「泡」了。
+我们按照同样的思路进行第二轮冒泡，得到的结果为[3, 1, 4, 5, 6, 7, 2, 8, 9]，
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_010.webp" alt="第二轮比较">
+进行第三轮冒泡，得到的结果为[1, 3, 4, 5, 6, 2, 7, 8, 9]，
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_011.webp" alt="第三轮比较">
+进行第四轮冒泡，得到的结果为[1, 3, 4, 5, 2, 6, 7, 8, 9]，
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_012.webp" alt="第四轮比较">
+进行第五轮冒泡，得到的结果为[1, 3, 4, 2, 5, 6, 7, 8, 9]，
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_013.webp" alt="第五轮比较">
+进行第六轮冒泡，得到的结果为[1, 3, 2, 4, 5, 6, 7, 8, 9]，
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_014.webp" alt="第六轮比较">
+进行第七轮冒泡，得到的结果为[1, 2, 3, 4, 5, 6, 7, 8, 9]，此时队列已经完全有序，排序工作结束。
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_015.webp" alt="第七轮比较"></p>
+<p>下面我们完整的看一遍动画演示
+<img src="https://images.fanschou.com/blog/algorithm-sort-bubble/20210710_01_016.gif" alt="完整动画"></p>
+<h2 id="代码实现">代码实现</h2>
+<p>了解了冒泡排序的整个排序过程，我们用代码将它实现一遍</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="java"><code><span class="line"><span style="color:#C678DD">public</span><span style="color:#C678DD"> class</span><span style="color:#E5C07B"> BubbleSort</span><span style="color:#ABB2BF"> {</span></span>
+<span class="line"><span style="color:#C678DD">   public</span><span style="color:#C678DD"> static</span><span style="color:#C678DD"> int</span><span style="color:#61AFEF">[] bubbleSort</span><span style="color:#ABB2BF">(</span><span style="color:#C678DD">int</span><span style="color:#ABB2BF">[] </span><span style="color:#E06C75;font-style:italic">arr</span><span style="color:#ABB2BF">)</span><span style="color:#ABB2BF"> {</span></span>
+<span class="line"><span style="color:#C678DD">       if</span><span style="color:#ABB2BF"> (arr </span><span style="color:#56B6C2">==</span><span style="color:#D19A66"> null</span><span style="color:#56B6C2"> ||</span><span style="color:#E5C07B"> arr</span><span style="color:#ABB2BF">.</span><span style="color:#E5C07B">length</span><span style="color:#56B6C2"> &#x3C;</span><span style="color:#D19A66"> 2</span><span style="color:#ABB2BF">) {</span></span>
+<span class="line"><span style="color:#C678DD">           return</span><span style="color:#ABB2BF"> arr;</span></span>
+<span class="line"><span style="color:#ABB2BF">       }</span></span>
+<span class="line"><span style="color:#C678DD">       int</span><span style="color:#E06C75"> n</span><span style="color:#56B6C2"> =</span><span style="color:#E5C07B"> arr</span><span style="color:#ABB2BF">.</span><span style="color:#E5C07B">length</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#C678DD">       for</span><span style="color:#ABB2BF"> (</span><span style="color:#C678DD">int</span><span style="color:#E06C75"> i</span><span style="color:#56B6C2"> =</span><span style="color:#D19A66"> 0</span><span style="color:#ABB2BF">; i </span><span style="color:#56B6C2">&#x3C;</span><span style="color:#ABB2BF"> n; i++) {</span></span>
+<span class="line"><span style="color:#C678DD">           for</span><span style="color:#ABB2BF"> (</span><span style="color:#C678DD">int</span><span style="color:#E06C75"> j</span><span style="color:#56B6C2"> =</span><span style="color:#D19A66"> 0</span><span style="color:#ABB2BF">; j </span><span style="color:#56B6C2">&#x3C;</span><span style="color:#ABB2BF"> n; j++) {</span></span>
+<span class="line"><span style="color:#C678DD">               if</span><span style="color:#ABB2BF"> (arr[j </span><span style="color:#56B6C2">+</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">] </span><span style="color:#56B6C2">&#x3C;</span><span style="color:#ABB2BF"> arr[j]) {</span></span>
+<span class="line"><span style="color:#C678DD">                    int</span><span style="color:#E06C75"> t</span><span style="color:#56B6C2"> =</span><span style="color:#ABB2BF"> arr[j];</span></span>
+<span class="line"><span style="color:#ABB2BF">                    arr[j] </span><span style="color:#56B6C2">=</span><span style="color:#ABB2BF"> arr[j </span><span style="color:#56B6C2">+</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">];</span></span>
+<span class="line"><span style="color:#ABB2BF">                    arr[j </span><span style="color:#56B6C2">+</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">] </span><span style="color:#56B6C2">=</span><span style="color:#ABB2BF"> t;</span></span>
+<span class="line"><span style="color:#ABB2BF">                }</span></span>
+<span class="line"><span style="color:#ABB2BF">            }</span></span>
+<span class="line"><span style="color:#ABB2BF">        }</span></span>
+<span class="line"><span style="color:#C678DD">        return</span><span style="color:#ABB2BF"> arr;</span></span>
+<span class="line"><span style="color:#ABB2BF">    }</span></span>
+<span class="line"><span style="color:#ABB2BF">}</span></span>
+<span class="line"></span></code></pre>
+<h3 id="第一次代码优化">第一次代码优化</h3>
+<p>我们仔细观察排序的过程，可以发现一个规律，就是每进行完一轮冒泡，待排序队列的尾部区间会在原本有序的基础上多加一个数。例如，第三轮的中间结果是[1, 3, 4, 5, 6, 2, 7, 8, 9]，此时尾部的[7, 8, 9]是有序的，第四轮的中间结果是[1, 3, 4, 5, 2, 6, 7, 8, 9]，此时尾部的[6, 7, 8, 9]是有序的。也就是说，在第 n 轮，待排序的队列的尾部 <code>n - 1</code> 个元素已经是有序的了，那么这一轮我们可以不再对这一段进行比较和交换。所以我们可以对上面的代码做出第一次优化。</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="java"><code><span class="line"><span style="color:#C678DD">public</span><span style="color:#C678DD"> class</span><span style="color:#E5C07B"> BubbleSort</span><span style="color:#ABB2BF"> {</span></span>
+<span class="line"><span style="color:#C678DD">   public</span><span style="color:#C678DD"> static</span><span style="color:#C678DD"> int</span><span style="color:#61AFEF">[] bubbleSort</span><span style="color:#ABB2BF">(</span><span style="color:#C678DD">int</span><span style="color:#ABB2BF">[] </span><span style="color:#E06C75;font-style:italic">arr</span><span style="color:#ABB2BF">)</span><span style="color:#ABB2BF"> {</span></span>
+<span class="line"><span style="color:#C678DD">       if</span><span style="color:#ABB2BF"> (arr </span><span style="color:#56B6C2">==</span><span style="color:#D19A66"> null</span><span style="color:#56B6C2"> ||</span><span style="color:#E5C07B"> arr</span><span style="color:#ABB2BF">.</span><span style="color:#E5C07B">length</span><span style="color:#56B6C2"> &#x3C;</span><span style="color:#D19A66"> 2</span><span style="color:#ABB2BF">) {</span></span>
+<span class="line"><span style="color:#C678DD">           return</span><span style="color:#ABB2BF"> arr;</span></span>
+<span class="line"><span style="color:#ABB2BF">       }</span></span>
+<span class="line"><span style="color:#C678DD">       int</span><span style="color:#E06C75"> n</span><span style="color:#56B6C2"> =</span><span style="color:#E5C07B"> arr</span><span style="color:#ABB2BF">.</span><span style="color:#E5C07B">length</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#C678DD">       for</span><span style="color:#ABB2BF"> (</span><span style="color:#C678DD">int</span><span style="color:#E06C75"> i</span><span style="color:#56B6C2"> =</span><span style="color:#D19A66"> 0</span><span style="color:#ABB2BF">; i </span><span style="color:#56B6C2">&#x3C;</span><span style="color:#ABB2BF"> n; i++) {</span></span>
+<span class="line"><span style="color:#C678DD">           for</span><span style="color:#ABB2BF"> (</span><span style="color:#C678DD">int</span><span style="color:#E06C75"> j</span><span style="color:#56B6C2"> =</span><span style="color:#D19A66"> 0</span><span style="color:#ABB2BF">; j </span><span style="color:#56B6C2">&#x3C;</span><span style="color:#ABB2BF"> n </span><span style="color:#56B6C2">-</span><span style="color:#ABB2BF"> i </span><span style="color:#56B6C2">-</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">; j++) {</span></span>
+<span class="line"><span style="color:#C678DD">               if</span><span style="color:#ABB2BF"> (arr[j </span><span style="color:#56B6C2">+</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">] </span><span style="color:#56B6C2">&#x3C;</span><span style="color:#ABB2BF"> arr[j]) {</span></span>
+<span class="line"><span style="color:#C678DD">                    int</span><span style="color:#E06C75"> t</span><span style="color:#56B6C2"> =</span><span style="color:#ABB2BF"> arr[j];</span></span>
+<span class="line"><span style="color:#ABB2BF">                    arr[j] </span><span style="color:#56B6C2">=</span><span style="color:#ABB2BF"> arr[j </span><span style="color:#56B6C2">+</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">];</span></span>
+<span class="line"><span style="color:#ABB2BF">                    arr[j </span><span style="color:#56B6C2">+</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">] </span><span style="color:#56B6C2">=</span><span style="color:#ABB2BF"> t;</span></span>
+<span class="line"><span style="color:#ABB2BF">                }</span></span>
+<span class="line"><span style="color:#ABB2BF">            }</span></span>
+<span class="line"><span style="color:#ABB2BF">        }</span></span>
+<span class="line"><span style="color:#C678DD">        return</span><span style="color:#ABB2BF"> arr;</span></span>
+<span class="line"><span style="color:#ABB2BF">    }</span></span>
+<span class="line"><span style="color:#ABB2BF">}</span></span>
+<span class="line"></span></code></pre>
+<h3 id="第二次代码优化">第二次代码优化</h3>
+<p>经过第一次的优化，我们减少了第二轮循环的次数，继续观察还有什么可以优化的地方。上面的代码，我们认定的是按这种办法全部循环完，则整个队列变得有序，那么有没有一种办法，在没有全部循环完毕，也可以判断出队列已经有序了呢？</p>
+<p>我们看到循环最主要的目的是将值较大的元素放到后面，那么假如从开始的第一对到结尾的最后一对，相邻的元素之间都没有发生交换的操作，这意味着右边的元素总是大于等于左边的元素，此时的数组已经可以认为是有序的了，我们无需再对剩余的元素重复比较下去了。用这个办法，我们可以不用等待循环全部走完，提前终止循环的过程，我们再对代码做一次优化。</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="java"><code><span class="line"><span style="color:#C678DD">public</span><span style="color:#C678DD"> class</span><span style="color:#E5C07B"> BubbleSort</span><span style="color:#ABB2BF"> {</span></span>
+<span class="line"><span style="color:#C678DD">   public</span><span style="color:#C678DD"> static</span><span style="color:#C678DD"> int</span><span style="color:#61AFEF">[] bubbleSort</span><span style="color:#ABB2BF">(</span><span style="color:#C678DD">int</span><span style="color:#ABB2BF">[] </span><span style="color:#E06C75;font-style:italic">arr</span><span style="color:#ABB2BF">)</span><span style="color:#ABB2BF"> {</span></span>
+<span class="line"><span style="color:#C678DD">       if</span><span style="color:#ABB2BF"> (arr </span><span style="color:#56B6C2">==</span><span style="color:#D19A66"> null</span><span style="color:#56B6C2"> ||</span><span style="color:#E5C07B"> arr</span><span style="color:#ABB2BF">.</span><span style="color:#E5C07B">length</span><span style="color:#56B6C2"> &#x3C;</span><span style="color:#D19A66"> 2</span><span style="color:#ABB2BF">) {</span></span>
+<span class="line"><span style="color:#C678DD">           return</span><span style="color:#ABB2BF"> arr;</span></span>
+<span class="line"><span style="color:#ABB2BF">       }</span></span>
+<span class="line"><span style="color:#C678DD">       int</span><span style="color:#E06C75"> n</span><span style="color:#56B6C2"> =</span><span style="color:#E5C07B"> arr</span><span style="color:#ABB2BF">.</span><span style="color:#E5C07B">length</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#C678DD">       for</span><span style="color:#ABB2BF"> (</span><span style="color:#C678DD">int</span><span style="color:#E06C75"> i</span><span style="color:#56B6C2"> =</span><span style="color:#D19A66"> 0</span><span style="color:#ABB2BF">; i </span><span style="color:#56B6C2">&#x3C;</span><span style="color:#ABB2BF"> n; i++) {</span></span>
+<span class="line"><span style="color:#C678DD">           boolean</span><span style="color:#E06C75"> flag</span><span style="color:#56B6C2"> =</span><span style="color:#D19A66"> true</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#C678DD">           for</span><span style="color:#ABB2BF"> (</span><span style="color:#C678DD">int</span><span style="color:#E06C75"> j</span><span style="color:#56B6C2"> =</span><span style="color:#D19A66"> 0</span><span style="color:#ABB2BF">; j </span><span style="color:#56B6C2">&#x3C;</span><span style="color:#ABB2BF"> n </span><span style="color:#56B6C2">-</span><span style="color:#ABB2BF"> i </span><span style="color:#56B6C2">-</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">; j++) {</span></span>
+<span class="line"><span style="color:#C678DD">                if</span><span style="color:#ABB2BF"> (arr[j </span><span style="color:#56B6C2">+</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">] </span><span style="color:#56B6C2">&#x3C;</span><span style="color:#ABB2BF"> arr[j]) {</span></span>
+<span class="line"><span style="color:#ABB2BF">                    flag </span><span style="color:#56B6C2">=</span><span style="color:#D19A66"> false</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#C678DD">                    int</span><span style="color:#E06C75"> t</span><span style="color:#56B6C2"> =</span><span style="color:#ABB2BF"> arr[j];</span></span>
+<span class="line"><span style="color:#ABB2BF">                    arr[j] </span><span style="color:#56B6C2">=</span><span style="color:#ABB2BF"> arr[j </span><span style="color:#56B6C2">+</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">];</span></span>
+<span class="line"><span style="color:#ABB2BF">                    arr[j </span><span style="color:#56B6C2">+</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">] </span><span style="color:#56B6C2">=</span><span style="color:#ABB2BF"> t;</span></span>
+<span class="line"><span style="color:#ABB2BF">                }</span></span>
+<span class="line"><span style="color:#ABB2BF">            }</span></span>
+<span class="line"><span style="color:#7F848E;font-style:italic">            //一趟下来是否发生位置交换</span></span>
+<span class="line"><span style="color:#C678DD">            if</span><span style="color:#ABB2BF">(</span><span style="color:#D19A66">false</span><span style="color:#ABB2BF">)</span></span>
+<span class="line"><span style="color:#C678DD">                break</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#ABB2BF">        }</span></span>
+<span class="line"><span style="color:#C678DD">        return</span><span style="color:#ABB2BF"> arr;</span></span>
+<span class="line"><span style="color:#ABB2BF">    }</span></span>
+<span class="line"><span style="color:#ABB2BF">}</span></span>
+<span class="line"></span></code></pre>
+<h3 id="代码优化小结">代码优化小结</h3>
+<p>上面我们对代码做了两次小的优化，简单总结一下就是两个方向：</p>
+<ul>
+<li>降低复杂度：我们通过发现细节，减少循环次数，后面我们可能还能遇到直接减少循环层级的，比如从3层循环降低到2层循环</li>
+<li>剪枝：对于代码执行链路中的很多分支，如果明确不会发生，或者发生了也无意义，可以采取提前终止的办法，达到一个减去分支的目的，可以有效降低执行效率</li>
+</ul>
+<h2 id="聊聊冒泡的特性">聊聊冒泡的特性</h2>
+<p>我在<a href="https://www.fanschou.com/algorithm/algorithm-sort-opening/">排序算法系列之开篇</a>谈到了一些术语，有一些是我们谈及算法时一定会讨论的，如复杂度等，下面我们就几个纬度简单聊聊冒泡的一些特性。</p>
+<h3 id="复杂度">复杂度</h3>
+<h4 id="时间复杂度">时间复杂度</h4>
+<p>分析一下冒泡排序的时间复杂度，可以看到最消耗时间的就是中间的两层循环，循环次数分别是 <code>n</code> 和 <code>n - i - 1</code>，那总的循环次数就是 <code>n * (n - i - 1)</code>，把它展开就是 <code>n² - n * i - n</code>，其中最大的数量级是 n²，其他的项相比平方阶来说都是不在一个数量级的。所以冒泡排序的时间复杂度为O(n²)。</p>
+<h4 id="空间复杂度">空间复杂度</h4>
+<p>代码运行过程中，我们只用了一个变量去做中转，交换两个位置的值，所以空间复杂度是O(1)，是常量级的复杂度。</p>
+<h3 id="排序的稳定性">排序的稳定性</h3>
+<p>冒泡排序算法是一个稳定算法，因为在值相等时，元素的相对位置没有变化。核心的点在于 <code>if (arr[j + 1] &#x3C; arr[j])</code> 这个判断，是只有前值大于后值时才会交换，等于时是不会交换的。当然，这里的判断也可以加上等于，就变成了不稳定排序，不过这样改可以但没必要。</p>
+<h3 id="排序使用的空间">排序使用的空间</h3>
+<p>排序时直接对数组的值进行交换，没有使用多余的存储空间，所以这是一个原地排序</p>
+<h2 id="结尾">结尾</h2>
+<p>到这里，就介绍完了有关冒泡排序相关的一些知识，如果你发现文中有任何错误，欢迎通过<a href="https://www.fanschou.com/author/#%E5%85%B3%E4%BA%8E%E7%AB%99%E7%82%B9">关于站点</a>的联系方式进行反馈。</p>  </article> <footer class="mt-5">  <p class="flex items-center gap-2"> <span class="inline-flex items-center"> <i class="i-mdi-chevron-double-left icon"></i> <a href="/posts/java/concurrent-synchronized">上一篇: Java并发之synchronized关键字解析</a> </span> <span class="inline-flex items-center"> <a href="/posts/algorithm/algorithm-sort-opening">下一篇: 排序算法系列之开篇</a> <i class="i-mdi-chevron-double-right icon"></i> </span> </p> </footer> <!-- <footer class="mt-5">
+  <p class="mb-2.5">{t('page_number', page.currentPage)} / {t('page_count', page.lastPage)}</p>
+  <p class="flex items-center gap-2">
+    <span class="inline-flex items-center">
+      <i class="i-mdi-chevron-double-left icon"></i>
+      {page.url.prev ? <a href={page.url.prev}> {t('prev')} </a> : <span>{t('prev')}</span>}
+    </span>
+
+    <span class="inline-flex items-center">
+      {page.url.next ? <a href={page.url.next}>{t('next')}</a> : <span>{t('next')}</span>}
+      <i class="i-mdi-chevron-double-right icon"></i>
+    </span>
+  </p>
+</footer> -->  <div py-16>     </div>  </main> <footer font-bold text-3 un-flex="~ col gap-1" un-lg="gap-3.5" class="lg:hidden p-7.5"> <p>
+© 2024 <a target="_blank" href="https://www.fanschou.com" rel="noopener noreferrer">Fan Zhou</a> </p> <p> <a target="_blank" href="https://beian.miit.gov.cn/">皖ICP备2021007904号</a> </p> <p> <a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490"> <img src="https://images.fanschou.com/blog/site/beian_gongan.webp" alt="备案" style="float:left;">皖公网安备 34180202000490号
+</a> </p> <!-- <p>
+    Theme
+    <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography" rel="noopener noreferrer">Typography</a>
+      by <a target="_blank" href="https://moeyua.com" rel="noopener noreferrer">Moeyua</a>
+  </p>
+  <p>
+    Proudly published with
+    <a target="_blank" href="https://astro.build" rel="noopener noreferrer">Astro</a>
+  </p> --> </footer> </div> </body></html>  

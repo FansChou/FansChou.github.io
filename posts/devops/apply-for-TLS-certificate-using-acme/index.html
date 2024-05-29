@@ -1,0 +1,111 @@
+<!DOCTYPE html><html lang="en"> <head><meta name="viewport" content="width=device-width"><meta name="generator" content="Astro v4.9.2"><link rel="sitemap" href="/sitemap-index.xml"><title>使用acme申请TLS证书</title><meta charset="utf-8"><link rel="canonical" href="https://www.fanschou.com/posts/devops/apply-for-TLS-certificate-using-acme/"><meta name="description" content="本文介绍了如何使用acme申请TLS证书，并将TLS证书安装到指定的目录下"><meta name="robots" content="index, follow"><meta property="og:title" content="使用acme申请TLS证书"><meta property="og:type" content="article"><meta property="og:image" content="https://www.fanschou.com/placeholder.png"><meta property="og:url" content="https://www.fanschou.com"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta name="twitter:image:src" content="https://www.fanschou.com/placeholder.png"><meta name="twitter:image:alt" content="本文介绍了如何使用acme申请TLS证书，并将TLS证书安装到指定的目录下"><meta name="twitter:creator"><meta name="twitter:site"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="使用acme申请TLS证书"><meta name="twitter:description" content="本文介绍了如何使用acme申请TLS证书，并将TLS证书安装到指定的目录下"><!-- Katex --><link rel="stylesheet" href="/_astro/about.CKOrui31.css">
+<link rel="stylesheet" href="/_astro/about.Q2hPb40S.css">
+<style>.tk-meta-input{background-color:#fff}.code-container{position:relative}.clipboard-copy{position:absolute;top:.5rem;right:.5rem;width:1.75rem;height:1.75rem;display:flex;justify-content:center;align-items:center;border-radius:.25rem}.clipboard-copy:hover{background-color:#30363d}
+</style><script type="module" src="/_astro/hoisted.C1FqLlVV.js"></script>
+<script type="module" src="/_astro/page.DFwqf4PB.js"></script></head> <body> <div un-max-lg="animate-fadein-down" un-lg="flex flex-row-reverse justify-between gap-4 px-8 mx-auto max-w-6xl" class="container contain-layout m-a"> <div un-lg="sticky top-0 h-screen py-20 animate-fadein-left gap-8" un-lg:flex="~ col justify-between items-start gap-4" class="p-7.5"> <header un-lg="grow-1 justify-between items-start" un-flex="~ col gap-2.5" class="text-center"> <hgroup un-hover:lg="bg-foreground color-background pt-3.75 pb-8.75 " un-lg=" write-vertical-right items-start px-2.5 pb-12 b-l-2px b-l-foreground-solid text-left" un-flex="~ col gap-2.5" class="cursor-pointer transition-[padding,background] duration-800 ease-in-out"> <a class="normal" href="/"> <h3 class="text-5 font-extrabold font-serif">Fan Zhou</h3> <h1 class="text-8 font-extrabold font-serif">六脉神间</h1> </a> </hgroup> <nav class="text-center font-bold" un-flex="~ col gap-2"> <ul un-lg="flex-col items-start text-4" class="text-3.5" un-flex="~ row gap-2 justify-center"> <li> <a href="/posts/page/1">文章</a> </li><li> <a href="/archive">归档</a> </li><li> <a href="/tags">标签</a> </li><li> <a href="/about">关于</a> </li> </ul> <ul un-flex="~ row gap-1 justify-center"> <li> <a href="https://github.com/FansChou" target="_blank" title="github" class="icon i-mdi-github"></a> </li><li> <a href="/rss.xml" target="_blank" title="rss" class="icon i-mdi-rss"></a> </li> </ul> </nav> </header> <footer font-bold text-3 un-flex="~ col gap-1" un-lg="gap-3.5" class="max-lg:hidden"> <p>
+© 2024 <a target="_blank" href="https://www.fanschou.com" rel="noopener noreferrer">Fan Zhou</a> </p> <p> <a target="_blank" href="https://beian.miit.gov.cn/">皖ICP备2021007904号</a> </p> <p> <a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490"> <img src="https://images.fanschou.com/blog/site/beian_gongan.webp" alt="备案" style="float:left;">皖公网安备 34180202000490号
+</a> </p> <!-- <p>
+    Theme
+    <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography" rel="noopener noreferrer">Typography</a>
+      by <a target="_blank" href="https://moeyua.com" rel="noopener noreferrer">Moeyua</a>
+  </p>
+  <p>
+    Proudly published with
+    <a target="_blank" href="https://astro.build" rel="noopener noreferrer">Astro</a>
+  </p> --> </footer> </div> <main un-lg="py-20 min-w-xl animate-fadein-down" class="p-7.5">  <article class="heti"> <header> <h1 class="post-title!"> <a href="/posts/devops/apply-for-TLS-certificate-using-acme/">使用acme申请TLS证书</a> </h1> <div class="mt-2 text-3.5"> <span>发布于</span> <time>2022-09-06</time> <span>更新于</span><time>2022-09-06</time> <a class="ml-2.5" href="/tags/devops">
+# Devops </a><a class="ml-2.5" href="/tags/tls">
+# TLS </a>  </div> </header>  <p>当前互联网中最多的流量应该是HTTP流量，但是HTTP流量相当于是明文的数据，也就是说在开放的互联网中，它是毫无保护的信息。随着时代的发展，越来越多的网站会为自己的HTTP流量套上一层加密，也就是我们所熟知的HTTPS流量，它与HTTP流量的区别就是它有一层TLS加密，整个加密的原理及流程，不是本篇文章的重点，本篇文章主要会指导你如何申请一个TLS证书。
+TLS刚出来的时候，大多都是需要付费获得，这就导致了大部分小站点的站长可能不愿意或者没有能力每年去负担这个费用，好随着 HTTPS 的普及，出现了一些免费提供TLS证书的机构，所产生的不方便之处也不过是证书有效期比较短，这对我们来说，是属于可以克服的困难。这里我们使用letsencrypt提供的免费证书服务。
+为了方便的申请证书而不需要与证书机构的API打交道，网络上也有很多的工具，这里我会使用一个叫做 <a href="https://github.com/acmesh-official/acme.sh">acme.sh</a> 的证书管理工具，它简单、轻量、高效，并可完成证书自动更新。让我们开始吧～</p>
+<h2 id="安装-acmesh">安装 <code>acme.sh</code></h2>
+<p>使用官方安装脚本</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#61AFEF">wget</span><span style="color:#D19A66"> -O</span><span style="color:#98C379"> -</span><span style="color:#98C379">  https://get.acme.sh</span><span style="color:#ABB2BF"> | </span><span style="color:#61AFEF">sh</span></span>
+<span class="line"></span></code></pre>
+<p>普通用户和 root 用户都可以安装使用。脚本会把相关文件都放在<code>~/.acme.sh/</code>下，并创建 一个 bash 的 alias, 方便你的使用： <code>alias acme.sh=~/.acme.sh/acme.sh</code>，安装过程不会污染已有的系统任何功能和文件, 所有的修改都限制在安装目录中: <code>~/.acme.sh/</code>。当然也有其他高级的安装选项，可以自行查看官网的<a href="https://github.com/acmesh-official/acme.sh/wiki/How-to-install">安装教程</a>。</p>
+<p>尝试执行<code>acme.sh</code>，这个时候，可能会提示命令不存在，通过刷新一下环境生效配置。</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#56B6C2">.</span><span style="color:#98C379"> .bashrc</span></span>
+<span class="line"></span></code></pre>
+<p>设置自动更新acme</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#61AFEF">acme.sh</span><span style="color:#D19A66"> --upgrade</span><span style="color:#D19A66"> --auto-upgrade</span></span>
+<span class="line"></span></code></pre>
+<p>因为<code>acme.sh</code>目前支持不止一个免费证书注册机构，这里我们设置默认为<code>letsencrypt</code>，<code>acme.sh</code>本身默认的<code>zerossl</code>需要邮箱，还是<code>letsencrypt</code>更简单更广泛应用一点。</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#61AFEF">acme.sh</span><span style="color:#D19A66"> --set-default-ca</span><span style="color:#D19A66"> --server</span><span style="color:#98C379"> letsencrypt</span></span>
+<span class="line"></span></code></pre>
+<h2 id="证书申请">证书申请</h2>
+<p><code>acme.sh</code>支持两种方式验证: <strong>HTTP</strong> 和 <strong>DNS 验证</strong>。我个人更推荐<strong>DNS 验证</strong>，这种方式的好处是，你不需要任何服务器，不需要任何公网IP，只需要 DNS 的解析记录即可完成验证。坏处是，如果不同时配置 <code>Automatic DNS API</code>，使用这种方式 <code>acme.sh</code> 将无法自动更新证书，每次都需要手动再次重新解析验证域名所有权。下面会以<strong>DNS 验证</strong>为例介绍证书申请。</p>
+<h3 id="dns验证申请证书">dns验证申请证书</h3>
+<h4 id="手动设置dns记录申请">手动设置DNS记录申请</h4>
+<p>执行如下命令：</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#61AFEF">acme.sh</span><span style="color:#D19A66"> --issue</span><span style="color:#D19A66"> --dns</span><span style="color:#D19A66"> -d</span><span style="color:#98C379"> 三级域名.mydomain.com</span><span style="color:#D19A66"> --keylength</span><span style="color:#98C379"> ec-256</span><span style="color:#D19A66"> --log</span><span style="color:#56B6C2"> \</span></span>
+<span class="line"><span style="color:#D19A66"> --yes-I-know-dns-manual-mode-enough-go-ahead-please</span></span>
+<span class="line"></span></code></pre>
+<p>这时，acme.sh 会生成相应的解析记录显示出来，会有一个txt记录的key，格式为<code>_acme-challenge.你的三级域名</code>，然后有一串字符串作为值，你只需要在你的域名管理面板中添加这条 txt 记录即可。</p>
+<p><img src="https://images.fanschou.com/blog/apply-for-TLS-certificate-using-acme/20220906_01_001.webp" alt="DNS记录"></p>
+<p>等待解析完成之后, 重新生成证书:</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#61AFEF">acme.sh</span><span style="color:#D19A66"> --renew</span><span style="color:#D19A66"> -d</span><span style="color:#98C379"> 三级域名.mydomain.com</span><span style="color:#D19A66"> --keylength</span><span style="color:#98C379"> ec-256</span><span style="color:#D19A66"> --log</span><span style="color:#56B6C2"> \</span></span>
+<span class="line"><span style="color:#D19A66">  --yes-I-know-dns-manual-mode-enough-go-ahead-please</span></span>
+<span class="line"></span></code></pre>
+<p>注意第二次和第一次不同的地方，这里用的是<code>--renew</code>。</p>
+<p>这里再解释一下用到的几个参数：</p>
+<ol>
+<li><code>--log</code>：这个是用来打印日志的，如果有报错可以看到</li>
+<li><code>--keylength</code>：这个用来指定证书类型，这里我们使用ECC证书，当然你可以使用RSA证书，按需选择</li>
+</ol>
+<p>如果担心自己操作有问题怎么办？可以直接在命令中加入测试的参数<code>--issue --test</code>来验证是否可以成功申请，这样可以避免在本地配置有误时，反复申请证书失败，超过 <code>Let's Encrypt</code> 的频率上限（比如，每小时、每个域名、每个用户失败最多 5 次），导致后面的步骤无法进行。如果出现问题可以再加上<code>--debug</code>参数，查看详细的申请过程和具体的错误。</p>
+<h4 id="dns-api自动申请">DNS API自动申请</h4>
+<p>DNS 方式的真正强大之处在于可以使用域名解析商提供的 API 自动添加 txt 记录完成验证。<code>acme.sh</code> 目前支持 cloudflare，dnspod，cloudxns，godaddy 以及 ovh 等数十种解析商的自动集成。</p>
+<p>以 dnspod 为例, 你需要先用 dnspod 账号登录到<a href="https://developer.godaddy.com/keys">开发者平台</a>，点击生成API Key按钮
+<img src="https://images.fanschou.com/blog/apply-for-TLS-certificate-using-acme/20220906_01_002.webp" alt="创建API Key"></p>
+<p>选择生产环境，直接下一步，生成你的 API id 和 API Key。
+<img src="https://images.fanschou.com/blog/apply-for-TLS-certificate-using-acme/20220906_01_003.webp" alt="生成API Key"></p>
+<p>然后设置环境变量，使用刚刚申请的 API id 和 API Key，执行命令：</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#C678DD">export</span><span style="color:#E06C75"> DP_Id</span><span style="color:#56B6C2">=</span><span style="color:#98C379">"yourapiid"</span></span>
+<span class="line"><span style="color:#C678DD">export</span><span style="color:#E06C75"> DP_Key</span><span style="color:#56B6C2">=</span><span style="color:#98C379">"youapikey"</span></span>
+<span class="line"><span style="color:#61AFEF">acme.sh</span><span style="color:#D19A66"> --issue</span><span style="color:#D19A66"> --dns</span><span style="color:#98C379"> dns_gd</span><span style="color:#D19A66"> -d</span><span style="color:#98C379"> 三级域名.mydomain.com</span><span style="color:#D19A66"> --keylength</span><span style="color:#98C379"> ec-256</span><span style="color:#D19A66"> --log</span></span>
+<span class="line"></span></code></pre>
+<p>证书就会自动生成了。这里给出的 API id 和 API Key 会被自动记录下来，将来你在使用 dnspod API 的时候，就不需要再次指定了。直接生成就好了。</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#61AFEF">acme.sh</span><span style="color:#D19A66">  --issue</span><span style="color:#D19A66">   -d</span><span style="color:#98C379">  三级域名.mydomain.com</span><span style="color:#D19A66">   --dns</span><span style="color:#98C379">  dns_dp</span></span>
+<span class="line"></span></code></pre>
+<p>可以查看官方<a href="https://github.com/acmesh-official/acme.sh/wiki/dnsapi">更详细的 API 用法</a></p>
+<h2 id="安装证书">安装证书</h2>
+<p>前面申请完的证书其实都是在<code>~/.acme.sh/</code>中的，一般我们的证书会用在别的地方，这个时候通过<code>acme.sh</code>的命令可以直接将证书安装到目标位置</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#61AFEF">acme.sh</span><span style="color:#D19A66"> --install-cert</span><span style="color:#D19A66"> -d</span><span style="color:#98C379"> 三级域名.mydomain.com</span><span style="color:#56B6C2"> \</span></span>
+<span class="line"><span style="color:#ABB2BF">--cert-file      </span><span style="color:#98C379">/path/to/certfile/in/apache/cert.pem</span><span style="color:#56B6C2">  \</span></span>
+<span class="line"><span style="color:#ABB2BF">--key-file       </span><span style="color:#98C379">/path/to/keyfile/in/apache/key.pem</span><span style="color:#56B6C2">  \</span></span>
+<span class="line"><span style="color:#ABB2BF">--fullchain-file </span><span style="color:#98C379">/path/to/fullchain/certfile/apache/fullchain.pem</span><span style="color:#56B6C2"> \</span></span>
+<span class="line"><span style="color:#ABB2BF">--reloadcmd     </span><span style="color:#98C379">"service nginx force-reload"</span></span>
+<span class="line"></span></code></pre>
+<p><code>--install-cert</code>命令可以携带很多参数，来指定目标文件。并且可以指定 <code>reloadcmd</code>，当证书更新以后，<code>reloadcmd</code>会被自动调用，让服务器生效。</p>
+<p>值得注意的是，这里指定的所有参数都会被自动记录下来，并在将来证书自动更新以后，被再次自动调用。</p>
+<h2 id="查看已安装证书信息">查看已安装证书信息</h2>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#61AFEF">acme.sh</span><span style="color:#D19A66"> --info</span><span style="color:#D19A66"> -d</span><span style="color:#98C379"> 三级域名.mydomain.com</span></span>
+<span class="line"></span></code></pre>
+<h2 id="更新证书">更新证书</h2>
+<p>目前证书在 60 天以后会自动更新，你无需任何操作。注意，如果你是通过前面说的手动设置DNS记录的方式申请的证书，那么不会进行自动更新。</p>
+<p>请确保 cronjob 正确安装，看起来是类似这样的:</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#61AFEF">crontab</span><span style="color:#D19A66">  -l</span></span>
+<span class="line"><span style="color:#61AFEF">56</span><span style="color:#E5C07B"> *</span><span style="color:#E5C07B"> *</span><span style="color:#E5C07B"> *</span><span style="color:#E5C07B"> *</span><span style="color:#98C379"> "/root/.acme.sh"/acme.sh</span><span style="color:#D19A66"> --cron</span><span style="color:#D19A66"> --home</span><span style="color:#98C379"> "/root/.acme.sh"</span><span style="color:#ABB2BF"> > </span><span style="color:#98C379">/dev/null</span></span>
+<span class="line"></span></code></pre>  </article> <footer class="mt-5">  <p class="flex items-center gap-2"> <span class="inline-flex items-center"> <i class="i-mdi-chevron-double-left icon"></i> <a href="/posts/redis/redis-sliding-window">上一篇: 用Redis滑动窗口解决CPU100%的问题</a> </span> <span class="inline-flex items-center"> <a href="/posts/install/tutorial-of-launchd-in-macos">下一篇: macOS下Launchd的介绍和使用</a> <i class="i-mdi-chevron-double-right icon"></i> </span> </p> </footer> <!-- <footer class="mt-5">
+  <p class="mb-2.5">{t('page_number', page.currentPage)} / {t('page_count', page.lastPage)}</p>
+  <p class="flex items-center gap-2">
+    <span class="inline-flex items-center">
+      <i class="i-mdi-chevron-double-left icon"></i>
+      {page.url.prev ? <a href={page.url.prev}> {t('prev')} </a> : <span>{t('prev')}</span>}
+    </span>
+
+    <span class="inline-flex items-center">
+      {page.url.next ? <a href={page.url.next}>{t('next')}</a> : <span>{t('next')}</span>}
+      <i class="i-mdi-chevron-double-right icon"></i>
+    </span>
+  </p>
+</footer> -->  <div py-16>     </div>  </main> <footer font-bold text-3 un-flex="~ col gap-1" un-lg="gap-3.5" class="lg:hidden p-7.5"> <p>
+© 2024 <a target="_blank" href="https://www.fanschou.com" rel="noopener noreferrer">Fan Zhou</a> </p> <p> <a target="_blank" href="https://beian.miit.gov.cn/">皖ICP备2021007904号</a> </p> <p> <a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490"> <img src="https://images.fanschou.com/blog/site/beian_gongan.webp" alt="备案" style="float:left;">皖公网安备 34180202000490号
+</a> </p> <!-- <p>
+    Theme
+    <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography" rel="noopener noreferrer">Typography</a>
+      by <a target="_blank" href="https://moeyua.com" rel="noopener noreferrer">Moeyua</a>
+  </p>
+  <p>
+    Proudly published with
+    <a target="_blank" href="https://astro.build" rel="noopener noreferrer">Astro</a>
+  </p> --> </footer> </div> </body></html>  

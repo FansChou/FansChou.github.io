@@ -1,0 +1,84 @@
+<!DOCTYPE html><html lang="en"> <head><meta name="viewport" content="width=device-width"><meta name="generator" content="Astro v4.9.2"><link rel="sitemap" href="/sitemap-index.xml"><title>用Redis滑动窗口解决CPU100%的问题</title><meta charset="utf-8"><link rel="canonical" href="https://www.fanschou.com/posts/redis/redis-sliding-window/"><meta name="description" content="在高并发的情况中，经常需要考虑的一个问题就是线程之间的死锁问题，并且总结出了很多最佳实践，这篇文章我们就来聊聊导致死锁的原因，以及如何避免产生死锁。"><meta name="robots" content="index, follow"><meta property="og:title" content="用Redis滑动窗口解决CPU100%的问题"><meta property="og:type" content="article"><meta property="og:image" content="https://www.fanschou.com/placeholder.png"><meta property="og:url" content="https://www.fanschou.com"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta name="twitter:image:src" content="https://www.fanschou.com/placeholder.png"><meta name="twitter:image:alt" content="在高并发的情况中，经常需要考虑的一个问题就是线程之间的死锁问题，并且总结出了很多最佳实践，这篇文章我们就来聊聊导致死锁的原因，以及如何避免产生死锁。"><meta name="twitter:creator"><meta name="twitter:site"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="用Redis滑动窗口解决CPU100%的问题"><meta name="twitter:description" content="在高并发的情况中，经常需要考虑的一个问题就是线程之间的死锁问题，并且总结出了很多最佳实践，这篇文章我们就来聊聊导致死锁的原因，以及如何避免产生死锁。"><!-- Katex --><link rel="stylesheet" href="/_astro/about.CKOrui31.css">
+<link rel="stylesheet" href="/_astro/about.Q2hPb40S.css">
+<style>.tk-meta-input{background-color:#fff}.code-container{position:relative}.clipboard-copy{position:absolute;top:.5rem;right:.5rem;width:1.75rem;height:1.75rem;display:flex;justify-content:center;align-items:center;border-radius:.25rem}.clipboard-copy:hover{background-color:#30363d}
+</style><script type="module" src="/_astro/hoisted.C1FqLlVV.js"></script>
+<script type="module" src="/_astro/page.DFwqf4PB.js"></script></head> <body> <div un-max-lg="animate-fadein-down" un-lg="flex flex-row-reverse justify-between gap-4 px-8 mx-auto max-w-6xl" class="container contain-layout m-a"> <div un-lg="sticky top-0 h-screen py-20 animate-fadein-left gap-8" un-lg:flex="~ col justify-between items-start gap-4" class="p-7.5"> <header un-lg="grow-1 justify-between items-start" un-flex="~ col gap-2.5" class="text-center"> <hgroup un-hover:lg="bg-foreground color-background pt-3.75 pb-8.75 " un-lg=" write-vertical-right items-start px-2.5 pb-12 b-l-2px b-l-foreground-solid text-left" un-flex="~ col gap-2.5" class="cursor-pointer transition-[padding,background] duration-800 ease-in-out"> <a class="normal" href="/"> <h3 class="text-5 font-extrabold font-serif">Fan Zhou</h3> <h1 class="text-8 font-extrabold font-serif">六脉神间</h1> </a> </hgroup> <nav class="text-center font-bold" un-flex="~ col gap-2"> <ul un-lg="flex-col items-start text-4" class="text-3.5" un-flex="~ row gap-2 justify-center"> <li> <a href="/posts/page/1">文章</a> </li><li> <a href="/archive">归档</a> </li><li> <a href="/tags">标签</a> </li><li> <a href="/about">关于</a> </li> </ul> <ul un-flex="~ row gap-1 justify-center"> <li> <a href="https://github.com/FansChou" target="_blank" title="github" class="icon i-mdi-github"></a> </li><li> <a href="/rss.xml" target="_blank" title="rss" class="icon i-mdi-rss"></a> </li> </ul> </nav> </header> <footer font-bold text-3 un-flex="~ col gap-1" un-lg="gap-3.5" class="max-lg:hidden"> <p>
+© 2024 <a target="_blank" href="https://www.fanschou.com" rel="noopener noreferrer">Fan Zhou</a> </p> <p> <a target="_blank" href="https://beian.miit.gov.cn/">皖ICP备2021007904号</a> </p> <p> <a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490"> <img src="https://images.fanschou.com/blog/site/beian_gongan.webp" alt="备案" style="float:left;">皖公网安备 34180202000490号
+</a> </p> <!-- <p>
+    Theme
+    <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography" rel="noopener noreferrer">Typography</a>
+      by <a target="_blank" href="https://moeyua.com" rel="noopener noreferrer">Moeyua</a>
+  </p>
+  <p>
+    Proudly published with
+    <a target="_blank" href="https://astro.build" rel="noopener noreferrer">Astro</a>
+  </p> --> </footer> </div> <main un-lg="py-20 min-w-xl animate-fadein-down" class="p-7.5">  <article class="heti"> <header> <h1 class="post-title!"> <a href="/posts/redis/redis-sliding-window/">用Redis滑动窗口解决CPU100%的问题</a> </h1> <div class="mt-2 text-3.5"> <span>发布于</span> <time>2022-09-22</time> <span>更新于</span><time>2022-09-22</time> <a class="ml-2.5" href="/tags/redis">
+# Redis </a>  </div> </header>  <p>最近接了个老项目的维护，不多说了，都是坑（流泪ing），然后就慢慢的解决一些问题。首先就是这个项目用的Redis集群总是告警，CPU总是90%以上，严重影响了业务的稳定性，所以先对这个下手。</p>
+<h2 id="分析问题">分析问题</h2>
+<p>Redis 的 CPU 飙升可能有很多原因，先从慢日志开始排查，立马就发现了问题，请求中有大量的 <code>keys</code> 命令去扫 key，大量的模糊搜索 key 导致了 Redis 的 CPU 升高。然后根据 <code>keys</code> 扫描的 key 值去代码中查找，发现基本集中在一块业务中，这里我抽象一下这块的业务，简单描述一下。</p>
+<p>这个项目做的是一个自动打电话的业务，每个电话在一段时间内只能呼出固定次数，这里有两个关键点：<strong>一段时间内</strong>和<strong>固定次数</strong>。项目老代码的实现就秀了啊，每次拨打之后存一个 key ，格式类似于 <code>call_电话号码_时间戳</code> ，然后 key 的过期时间就设置成前面说的<strong>一段时间内</strong>这个时间长度。当进行拨打前置校验时，直接通过 <code>keys call_电话号码_*</code> 扫描拿到这个电话打过的次数，因为设置了过期时间，所以有效的 key 的个数，就是一段时间内已经呼出的次数，再用这个次数和阈值比较即可。从这个方面来说，这个方案确实也实现了业务要求，但是 Redis 就被一次次的 <code>keys</code> 命令扫爆了。</p>
+<h2 id="新的解决方案">新的解决方案</h2>
+<p>在原因分析中，其实已经发现了，我们需要统计一段时间内的电话拨打次数，因为时间往前走的关系，这个<strong>一段时间</strong>所囊括的时间范围也是不断往前移动的。这个场景就很熟悉了，就是典型的滑动窗口问题，而用 Redis 去实现的话，有比前面那种更优雅的方式。这里我们采用了 <code>zset</code> 去实现滑动窗口。</p>
+<p>我们以 <code>call_电话号码</code> 作为 <code>zset</code> 的key，然后每打一个电话，往这个 <code>zset</code> 添加一个 value 和 score ， value 这里我们用了时间戳，因为估算的并发可以确保这个 value 不会重复，这里要注意一点，就是 value 一定要确保不能重复，否则 <code>zset</code> 的数量是不准的，可能比你实际的数量偏小； score 这里用的也是时间戳，当来请求校验的时候，先使用 <code>zremrangeByScore</code> 命令，移除掉超过时间区间的 value ，然后 <code>zcard</code> 命令再去统计 value 的数量，就是我们要的一段时间内已经呼出的次数。这里连续操作了两次 Redis ，所以可以用 <code>pipeline</code> 去把操作放在一起。</p>
+<h2 id="代码实现">代码实现</h2>
+<p>下面我用 Java 写一下简单的样板，用的是 Jedis 操作 Redis 。</p>
+<p>添加记录的地方很简单，就是一条 <code>zadd</code> 命令：</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="java"><code><span class="line"><span style="color:#E5C07B">jedis</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">zadd</span><span style="color:#ABB2BF">(key, score, member);</span></span>
+<span class="line"></span></code></pre>
+<p>然后在判断限制的地方，获取 <code>zset</code> 的数量：</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="java"><code><span class="line"><span style="color:#7F848E;font-style:italic">/**</span></span>
+<span class="line"><span style="color:#7F848E;font-style:italic"> * 查看限流周期内的行为次数</span></span>
+<span class="line"><span style="color:#7F848E;font-style:italic"> *</span></span>
+<span class="line"><span style="color:#7F848E;font-style:italic"> * </span><span style="color:#C678DD;font-style:italic">@param</span><span style="color:#E06C75;font-style:italic"> key</span><span style="color:#7F848E;font-style:italic">           行为key</span></span>
+<span class="line"><span style="color:#7F848E;font-style:italic"> * </span><span style="color:#C678DD;font-style:italic">@param</span><span style="color:#E06C75;font-style:italic"> period</span><span style="color:#7F848E;font-style:italic">        限流周期,unit=second</span></span>
+<span class="line"><span style="color:#7F848E;font-style:italic"> * </span><span style="color:#C678DD;font-style:italic">@return</span></span>
+<span class="line"><span style="color:#7F848E;font-style:italic"> */</span></span>
+<span class="line"><span style="color:#C678DD">public</span><span style="color:#C678DD"> long</span><span style="color:#61AFEF"> getActivityTimes</span><span style="color:#E06C75">(</span><span style="color:#E5C07B">String</span><span style="color:#E06C75"> key</span><span style="color:#ABB2BF">,</span><span style="color:#C678DD"> int</span><span style="color:#E06C75"> period) {</span></span>
+<span class="line"><span style="color:#C678DD">    long</span><span style="color:#E06C75"> count </span><span style="color:#56B6C2">=</span><span style="color:#D19A66"> 0L</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#C678DD">    try</span><span style="color:#E06C75">(</span><span style="color:#E5C07B">Jedis</span><span style="color:#E06C75"> jedis </span><span style="color:#56B6C2">=</span><span style="color:#61AFEF"> getJedis</span><span style="color:#E06C75">()){</span></span>
+<span class="line"><span style="color:#C678DD">        long</span><span style="color:#E06C75"> ts </span><span style="color:#56B6C2">=</span><span style="color:#E5C07B"> System</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">currentTimeMillis</span><span style="color:#ABB2BF">();</span></span>
+<span class="line"><span style="color:#E5C07B">        Pipeline</span><span style="color:#E06C75"> pipe </span><span style="color:#56B6C2">=</span><span style="color:#E5C07B"> jedis</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">pipelined</span><span style="color:#ABB2BF">();</span></span>
+<span class="line"><span style="color:#E5C07B">        pipe</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">multi</span><span style="color:#ABB2BF">();</span></span>
+<span class="line"><span style="color:#7F848E;font-style:italic">        // 移除滑动窗口之外的数据</span></span>
+<span class="line"><span style="color:#E5C07B">        pipe</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">zremrangeByScore</span><span style="color:#ABB2BF">(key, </span><span style="color:#D19A66">0</span><span style="color:#ABB2BF">, ts </span><span style="color:#56B6C2">-</span><span style="color:#ABB2BF"> (period </span><span style="color:#56B6C2">*</span><span style="color:#D19A66"> 1000.0</span><span style="color:#ABB2BF">));</span></span>
+<span class="line"><span style="color:#E5C07B">        Response</span><span style="color:#ABB2BF">&#x3C;</span><span style="color:#E5C07B">Long</span><span style="color:#ABB2BF">></span><span style="color:#E06C75"> zcount </span><span style="color:#56B6C2">=</span><span style="color:#E5C07B"> pipe</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">zcard</span><span style="color:#ABB2BF">(key);</span></span>
+<span class="line"><span style="color:#7F848E;font-style:italic">        // 设置行为的过期时间，如果数据为冷数据，zset将会删除以此节省内存空间</span></span>
+<span class="line"><span style="color:#E5C07B">        pipe</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">expire</span><span style="color:#ABB2BF">(key, period);</span></span>
+<span class="line"><span style="color:#E5C07B">        pipe</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">exec</span><span style="color:#ABB2BF">();</span></span>
+<span class="line"><span style="color:#E5C07B">        pipe</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">close</span><span style="color:#ABB2BF">();</span></span>
+<span class="line"><span style="color:#E06C75">        count </span><span style="color:#56B6C2">=</span><span style="color:#E5C07B"> zcount</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">get</span><span style="color:#ABB2BF">();</span></span>
+<span class="line"><span style="color:#E06C75">    } </span><span style="color:#C678DD">catch</span><span style="color:#E06C75"> (</span><span style="color:#E5C07B">Exception</span><span style="color:#E06C75;font-style:italic"> e</span><span style="color:#E06C75">) {</span></span>
+<span class="line"><span style="color:#E5C07B">        log</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">error</span><span style="color:#ABB2BF">(</span><span style="color:#98C379">"redis getActivityTimes error, key: {}"</span><span style="color:#ABB2BF">, key, e);</span></span>
+<span class="line"><span style="color:#E06C75">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C678DD">    return</span><span style="color:#E06C75"> count</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">}</span></span>
+<span class="line"></span></code></pre>
+<p>这里先用 <code>zremrangeByScore</code> 删除过期的 value ，然后 <code>zcard</code> 统计数量，同时设置了 key 的过期时间，避免长期占用内存。</p>
+<h2 id="优化后">优化后</h2>
+<p>上述的改动发布之后，Redis的CPU占用就直线下降了，说明这次的优化还是很有成效的。
+<img src="https://images.fanschou.com/blog/redis-sliding-window/20220922_01_001.webp" alt="Redis的CPU占用"></p>
+<p>如果你也有相关类似的问题，也可以参考这种方案，当然你也可以单纯使用滑动窗口用在别的业务实现上。希望你也能有所收获。</p>  </article> <footer class="mt-5">  <p class="flex items-center gap-2">  <span class="inline-flex items-center"> <a href="/posts/devops/apply-for-TLS-certificate-using-acme">下一篇: 使用acme申请TLS证书</a> <i class="i-mdi-chevron-double-right icon"></i> </span> </p> </footer> <!-- <footer class="mt-5">
+  <p class="mb-2.5">{t('page_number', page.currentPage)} / {t('page_count', page.lastPage)}</p>
+  <p class="flex items-center gap-2">
+    <span class="inline-flex items-center">
+      <i class="i-mdi-chevron-double-left icon"></i>
+      {page.url.prev ? <a href={page.url.prev}> {t('prev')} </a> : <span>{t('prev')}</span>}
+    </span>
+
+    <span class="inline-flex items-center">
+      {page.url.next ? <a href={page.url.next}>{t('next')}</a> : <span>{t('next')}</span>}
+      <i class="i-mdi-chevron-double-right icon"></i>
+    </span>
+  </p>
+</footer> -->  <div py-16>     </div>  </main> <footer font-bold text-3 un-flex="~ col gap-1" un-lg="gap-3.5" class="lg:hidden p-7.5"> <p>
+© 2024 <a target="_blank" href="https://www.fanschou.com" rel="noopener noreferrer">Fan Zhou</a> </p> <p> <a target="_blank" href="https://beian.miit.gov.cn/">皖ICP备2021007904号</a> </p> <p> <a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490"> <img src="https://images.fanschou.com/blog/site/beian_gongan.webp" alt="备案" style="float:left;">皖公网安备 34180202000490号
+</a> </p> <!-- <p>
+    Theme
+    <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography" rel="noopener noreferrer">Typography</a>
+      by <a target="_blank" href="https://moeyua.com" rel="noopener noreferrer">Moeyua</a>
+  </p>
+  <p>
+    Proudly published with
+    <a target="_blank" href="https://astro.build" rel="noopener noreferrer">Astro</a>
+  </p> --> </footer> </div> </body></html>  

@@ -1,0 +1,115 @@
+<!DOCTYPE html><html lang="en"> <head><meta name="viewport" content="width=device-width"><meta name="generator" content="Astro v4.9.2"><link rel="sitemap" href="/sitemap-index.xml"><title>排序算法系列之开篇</title><meta charset="utf-8"><link rel="canonical" href="https://www.fanschou.com/posts/algorithm/algorithm-sort-opening/"><meta name="description" content="本篇文章作为排序算法系列的开篇，主要做一个开篇明义的讲解，介绍了一些关于排序算法的基本术语，有一些概念也是学习任何算法都有益处的知识。同时有了这一篇文章的介绍，后续排序算法系列文章的展开也可以基于此省去一些常用知识的说明。"><meta name="robots" content="index, follow"><meta property="og:title" content="排序算法系列之开篇"><meta property="og:type" content="article"><meta property="og:image" content="https://www.fanschou.com/placeholder.png"><meta property="og:url" content="https://www.fanschou.com"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta name="twitter:image:src" content="https://www.fanschou.com/placeholder.png"><meta name="twitter:image:alt" content="本篇文章作为排序算法系列的开篇，主要做一个开篇明义的讲解，介绍了一些关于排序算法的基本术语，有一些概念也是学习任何算法都有益处的知识。同时有了这一篇文章的介绍，后续排序算法系列文章的展开也可以基于此省去一些常用知识的说明。"><meta name="twitter:creator"><meta name="twitter:site"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="排序算法系列之开篇"><meta name="twitter:description" content="本篇文章作为排序算法系列的开篇，主要做一个开篇明义的讲解，介绍了一些关于排序算法的基本术语，有一些概念也是学习任何算法都有益处的知识。同时有了这一篇文章的介绍，后续排序算法系列文章的展开也可以基于此省去一些常用知识的说明。"><!-- Katex --><link rel="stylesheet" href="/_astro/about.CKOrui31.css">
+<link rel="stylesheet" href="/_astro/about.Q2hPb40S.css">
+<style>.tk-meta-input{background-color:#fff}.code-container{position:relative}.clipboard-copy{position:absolute;top:.5rem;right:.5rem;width:1.75rem;height:1.75rem;display:flex;justify-content:center;align-items:center;border-radius:.25rem}.clipboard-copy:hover{background-color:#30363d}
+</style><script type="module" src="/_astro/hoisted.C1FqLlVV.js"></script>
+<script type="module" src="/_astro/page.DFwqf4PB.js"></script></head> <body> <div un-max-lg="animate-fadein-down" un-lg="flex flex-row-reverse justify-between gap-4 px-8 mx-auto max-w-6xl" class="container contain-layout m-a"> <div un-lg="sticky top-0 h-screen py-20 animate-fadein-left gap-8" un-lg:flex="~ col justify-between items-start gap-4" class="p-7.5"> <header un-lg="grow-1 justify-between items-start" un-flex="~ col gap-2.5" class="text-center"> <hgroup un-hover:lg="bg-foreground color-background pt-3.75 pb-8.75 " un-lg=" write-vertical-right items-start px-2.5 pb-12 b-l-2px b-l-foreground-solid text-left" un-flex="~ col gap-2.5" class="cursor-pointer transition-[padding,background] duration-800 ease-in-out"> <a class="normal" href="/"> <h3 class="text-5 font-extrabold font-serif">Fan Zhou</h3> <h1 class="text-8 font-extrabold font-serif">六脉神间</h1> </a> </hgroup> <nav class="text-center font-bold" un-flex="~ col gap-2"> <ul un-lg="flex-col items-start text-4" class="text-3.5" un-flex="~ row gap-2 justify-center"> <li> <a href="/posts/page/1">文章</a> </li><li> <a href="/archive">归档</a> </li><li> <a href="/tags">标签</a> </li><li> <a href="/about">关于</a> </li> </ul> <ul un-flex="~ row gap-1 justify-center"> <li> <a href="https://github.com/FansChou" target="_blank" title="github" class="icon i-mdi-github"></a> </li><li> <a href="/rss.xml" target="_blank" title="rss" class="icon i-mdi-rss"></a> </li> </ul> </nav> </header> <footer font-bold text-3 un-flex="~ col gap-1" un-lg="gap-3.5" class="max-lg:hidden"> <p>
+© 2024 <a target="_blank" href="https://www.fanschou.com" rel="noopener noreferrer">Fan Zhou</a> </p> <p> <a target="_blank" href="https://beian.miit.gov.cn/">皖ICP备2021007904号</a> </p> <p> <a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490"> <img src="https://images.fanschou.com/blog/site/beian_gongan.webp" alt="备案" style="float:left;">皖公网安备 34180202000490号
+</a> </p> <!-- <p>
+    Theme
+    <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography" rel="noopener noreferrer">Typography</a>
+      by <a target="_blank" href="https://moeyua.com" rel="noopener noreferrer">Moeyua</a>
+  </p>
+  <p>
+    Proudly published with
+    <a target="_blank" href="https://astro.build" rel="noopener noreferrer">Astro</a>
+  </p> --> </footer> </div> <main un-lg="py-20 min-w-xl animate-fadein-down" class="p-7.5">  <article class="heti"> <header> <h1 class="post-title!"> <a href="/posts/algorithm/algorithm-sort-opening/">排序算法系列之开篇</a> </h1> <div class="mt-2 text-3.5"> <span>发布于</span> <time>2021-07-03</time> <span>更新于</span><time>2021-07-03</time> <a class="ml-2.5" href="/tags/sort-algorithm">
+# 排序算法 </a>  </div> </header>  <h2 id="引言">引言</h2>
+<p>对数据排序可以说是我们编码过程中最常碰到的一种操作了，为此出现了很多不同的排序算法，各有各的特点。从本篇文章开始，会陆续介绍一些常用的排序算法。在开始整个系列之前，我希望先通过这个开篇，介绍一些关于排序算法的一些基本概念，方便读者阅读接下来的文章。</p>
+<p>为了方便大家理解，我会尽量制作一些动图演示，每篇文章也会给出代码的实现，如有错漏，望各位读者可以给予指正。</p>
+<h2 id="基本术语">基本术语</h2>
+<h3 id="复杂度">复杂度</h3>
+<p>一般对于算法的复杂度，我们都会从时间复杂度和空间复杂度两个角度去衡量，然而有时候，时间和空间是不可兼得的，我们需要针对具体的情境，在两者之间取得一种平衡。</p>
+<p>在摩尔定律的加持之下，现代计算机硬件性能得到了极大提升，所以在一般情况下，我们会选择空间换时间的做法，来提高算法的运行效率，如果没有明确提及是哪种复杂度，一般都会默认是时间复杂度。</p>
+<h4 id="时间复杂度">时间复杂度</h4>
+<p>时间复杂度用来表示一个算法执行所消耗的时间。那么算法的执行时间如何衡量呢？最简单的办法就是将算法程序跑一遍得到它的运行时间，但是这样会有很多弊端，首先这种方式非常容易受运行环境的影响，机器性能和数据规模的不同都会造成影响，并且，很多时候仅仅只是提出了算法思路，真正的代码还没有实现，此时如何衡量时间复杂度呢？</p>
+<p>因此，我们采用了一种更通用的表示方式：<strong>「 大O符号表示法 」</strong>，即 <code>T(n) = O(f(n))</code> ，也就是在 n 的规模下，算法的时间复杂度为 O(f(n)) 。</p>
+<p>举一个简单的例子：</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="java"><code><span class="line"><span style="color:#C678DD">for</span><span style="color:#E06C75">(i </span><span style="color:#56B6C2">=</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">;</span><span style="color:#E06C75"> i </span><span style="color:#56B6C2">&#x3C;=</span><span style="color:#E06C75"> n</span><span style="color:#ABB2BF">;</span><span style="color:#E06C75"> i</span><span style="color:#ABB2BF">++</span><span style="color:#E06C75">)</span></span>
+<span class="line"><span style="color:#E06C75">{</span></span>
+<span class="line"><span style="color:#E06C75">   j </span><span style="color:#56B6C2">=</span><span style="color:#E06C75"> i</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">   j</span><span style="color:#ABB2BF">++;</span></span>
+<span class="line"><span style="color:#E06C75">}</span></span>
+<span class="line"></span></code></pre>
+<p>通过 <strong>「大O符号表示法」</strong> ，这段代码的时间复杂度为：O(n)，为什么是 O(n) 呢？</p>
+<p>我们可以看到这是一个循环，循环次数是 n ，当 n 的数量加大时，相应的，程序的执行时间也会增长，那么我们可以认为，这段代码的时间复杂度是随着循环次数的增加，而呈现出一种线性增长的态势。到这里我们看出 <strong>「 大O符号表示法 」</strong> 不是一种精确表示复杂度的计算方式，这里的 <strong>O</strong> 其实表示的是复杂度与某个基数公式的正比例关系，这个基数公式其实表达的是一种近似的数量级。</p>
+<p>常见的时间复杂度量级有：</p>
+<ul>
+<li>常数阶O(1)</li>
+<li>对数阶O(logN)</li>
+<li>线性阶O(n)</li>
+<li>线性对数阶O(nlogN)</li>
+<li>平方阶O(n²)</li>
+<li>立方阶O(n³)</li>
+<li>K次方阶O(n^k)</li>
+<li>指数阶(2^n)</li>
+</ul>
+<p>上面从上至下依次的时间复杂度越来越大，执行的效率越来越低。</p>
+<p>对于时间复杂度来说，一般比较关注平均时间复杂度和最差时间复杂度，一个表示一般情况下的时间复杂度，一个是表示极端情况下最慢的情况。</p>
+<h4 id="空间复杂度">空间复杂度</h4>
+<p>既然时间复杂度不是用来计算程序具体耗时的，那么同理我们也应该知道，空间复杂度也不是用来直接计算程序<strong>实际占用</strong>的空间的。</p>
+<p>空间复杂度是对一个算法在运行过程中临时使用存储空间大小的一个量度，同样反映的是一个趋势。</p>
+<p>我们来看一个交换变量的例子：</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="java"><code><span class="line"><span style="color:#C678DD">public</span><span style="color:#61AFEF"> swap</span><span style="color:#E06C75">(</span><span style="color:#C678DD">int</span><span style="color:#E06C75"> a</span><span style="color:#ABB2BF">,</span><span style="color:#C678DD"> int</span><span style="color:#E06C75"> b){</span></span>
+<span class="line"><span style="color:#C678DD">    int</span><span style="color:#E06C75"> temp </span><span style="color:#56B6C2">=</span><span style="color:#E06C75"> a</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">    a </span><span style="color:#56B6C2">=</span><span style="color:#E06C75"> b</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">    b </span><span style="color:#56B6C2">=</span><span style="color:#E06C75"> temp</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">}</span></span>
+<span class="line"></span></code></pre>
+<p>上面的代码将两个变量的值进行了交换，用到了一个新的变量 <code>temp</code> ，无论这个方法怎么被调用，始终也只会使用这一个变量的空间，那么它的空间复杂度就是O(1)，也就是常数级别的复杂度。</p>
+<h3 id="排序的稳定性">排序的稳定性</h3>
+<h4 id="稳定排序">稳定排序</h4>
+<p>假设给定一个无序的列表，如果 a 原本在 b 的前面，且 a == b，排序之后 a 仍然在 b 的前面，我们称这种排序方式是一个稳定排序。<strong>「 稳定 」</strong> 指代的是元素相对顺序没有改变。</p>
+<h4 id="不稳定排序">不稳定排序</h4>
+<p>对比稳定排序，如果 a 原本在 b 的前面，且 a == b，排序之后 a 可能不在 b 的前面，我们称这种排序方式是一个不稳定排序。</p>
+<h3 id="排序使用的空间">排序使用的空间</h3>
+<p>从排序是否使用额外的空间，我们也可以分为两种。</p>
+<h4 id="原地排序">原地排序</h4>
+<p>原地排序就是指在排序过程中不申请多余的存储空间，只利用原来存储待排数据的存储空间进行比较和交换的排序方式。</p>
+<h4 id="非原地排序">非原地排序</h4>
+<p>对比原地排序，非原地排序则需要利用额外的数组来辅助排序。</p>
+<h3 id="排序使用的空间位置">排序使用的空间位置</h3>
+<p>从排序使用的空间来源，也可以分成两类</p>
+<h4 id="内部排序">内部排序</h4>
+<p>排序数据全部记录在内存中进行排序，这种属于内部排序。</p>
+<h4 id="外部排序">外部排序</h4>
+<p>如果因为排序的数据很大，内存空间一次不能容纳全部的排序记录，在排序过程中需要访问外存，这种就属于外部排序。</p>
+<h2 id="排序类别">排序类别</h2>
+<ul>
+<li>比较排序
+<ul>
+<li><a href="https://www.fanschou.com/algorithm/algorithm-sort-bubble/">冒泡排序</a></li>
+<li>选择排序（Selection Sort）</li>
+<li><a href="https://www.fanschou.com/algorithm/algorithm-insertion-sort/">插入排序</a></li>
+<li>希尔排序（Shell Sort）</li>
+<li>归并排序（Merge Sort）</li>
+<li>快速排序（Quick Sort）</li>
+</ul>
+</li>
+<li>桶排序（Bucket Sort）</li>
+<li>计数排序（Counting Sort）</li>
+<li>基数排序（Radix Sort）</li>
+<li>堆排序（Heap Sort）</li>
+</ul>  </article> <footer class="mt-5">  <p class="flex items-center gap-2"> <span class="inline-flex items-center"> <i class="i-mdi-chevron-double-left icon"></i> <a href="/posts/algorithm/algorithm-sort-bubble">上一篇: 排序算法系列之冒泡排序</a> </span> <span class="inline-flex items-center"> <a href="/posts/algorithm/algorithm-string-search-kmp">下一篇: 浅谈KMP算法</a> <i class="i-mdi-chevron-double-right icon"></i> </span> </p> </footer> <!-- <footer class="mt-5">
+  <p class="mb-2.5">{t('page_number', page.currentPage)} / {t('page_count', page.lastPage)}</p>
+  <p class="flex items-center gap-2">
+    <span class="inline-flex items-center">
+      <i class="i-mdi-chevron-double-left icon"></i>
+      {page.url.prev ? <a href={page.url.prev}> {t('prev')} </a> : <span>{t('prev')}</span>}
+    </span>
+
+    <span class="inline-flex items-center">
+      {page.url.next ? <a href={page.url.next}>{t('next')}</a> : <span>{t('next')}</span>}
+      <i class="i-mdi-chevron-double-right icon"></i>
+    </span>
+  </p>
+</footer> -->  <div py-16>     </div>  </main> <footer font-bold text-3 un-flex="~ col gap-1" un-lg="gap-3.5" class="lg:hidden p-7.5"> <p>
+© 2024 <a target="_blank" href="https://www.fanschou.com" rel="noopener noreferrer">Fan Zhou</a> </p> <p> <a target="_blank" href="https://beian.miit.gov.cn/">皖ICP备2021007904号</a> </p> <p> <a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490"> <img src="https://images.fanschou.com/blog/site/beian_gongan.webp" alt="备案" style="float:left;">皖公网安备 34180202000490号
+</a> </p> <!-- <p>
+    Theme
+    <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography" rel="noopener noreferrer">Typography</a>
+      by <a target="_blank" href="https://moeyua.com" rel="noopener noreferrer">Moeyua</a>
+  </p>
+  <p>
+    Proudly published with
+    <a target="_blank" href="https://astro.build" rel="noopener noreferrer">Astro</a>
+  </p> --> </footer> </div> </body></html>  

@@ -1,0 +1,273 @@
+<!DOCTYPE html><html lang="en"> <head><meta name="viewport" content="width=device-width"><meta name="generator" content="Astro v4.9.2"><link rel="sitemap" href="/sitemap-index.xml"><title>macOS下Launchd的介绍和使用</title><meta charset="utf-8"><link rel="canonical" href="https://www.fanschou.com/posts/install/tutorial-of-launchd-in-macos/"><meta name="description" content="本文介绍了macOS下Launchd的介绍和使用"><meta name="robots" content="index, follow"><meta property="og:title" content="macOS下Launchd的介绍和使用"><meta property="og:type" content="article"><meta property="og:image" content="https://www.fanschou.com/placeholder.png"><meta property="og:url" content="https://www.fanschou.com"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta name="twitter:image:src" content="https://www.fanschou.com/placeholder.png"><meta name="twitter:image:alt" content="本文介绍了macOS下Launchd的介绍和使用"><meta name="twitter:creator"><meta name="twitter:site"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="macOS下Launchd的介绍和使用"><meta name="twitter:description" content="本文介绍了macOS下Launchd的介绍和使用"><!-- Katex --><link rel="stylesheet" href="/_astro/about.CKOrui31.css">
+<link rel="stylesheet" href="/_astro/about.Q2hPb40S.css">
+<style>.tk-meta-input{background-color:#fff}.code-container{position:relative}.clipboard-copy{position:absolute;top:.5rem;right:.5rem;width:1.75rem;height:1.75rem;display:flex;justify-content:center;align-items:center;border-radius:.25rem}.clipboard-copy:hover{background-color:#30363d}
+</style><script type="module" src="/_astro/hoisted.C1FqLlVV.js"></script>
+<script type="module" src="/_astro/page.DFwqf4PB.js"></script></head> <body> <div un-max-lg="animate-fadein-down" un-lg="flex flex-row-reverse justify-between gap-4 px-8 mx-auto max-w-6xl" class="container contain-layout m-a"> <div un-lg="sticky top-0 h-screen py-20 animate-fadein-left gap-8" un-lg:flex="~ col justify-between items-start gap-4" class="p-7.5"> <header un-lg="grow-1 justify-between items-start" un-flex="~ col gap-2.5" class="text-center"> <hgroup un-hover:lg="bg-foreground color-background pt-3.75 pb-8.75 " un-lg=" write-vertical-right items-start px-2.5 pb-12 b-l-2px b-l-foreground-solid text-left" un-flex="~ col gap-2.5" class="cursor-pointer transition-[padding,background] duration-800 ease-in-out"> <a class="normal" href="/"> <h3 class="text-5 font-extrabold font-serif">Fan Zhou</h3> <h1 class="text-8 font-extrabold font-serif">六脉神间</h1> </a> </hgroup> <nav class="text-center font-bold" un-flex="~ col gap-2"> <ul un-lg="flex-col items-start text-4" class="text-3.5" un-flex="~ row gap-2 justify-center"> <li> <a href="/posts/page/1">文章</a> </li><li> <a href="/archive">归档</a> </li><li> <a href="/tags">标签</a> </li><li> <a href="/about">关于</a> </li> </ul> <ul un-flex="~ row gap-1 justify-center"> <li> <a href="https://github.com/FansChou" target="_blank" title="github" class="icon i-mdi-github"></a> </li><li> <a href="/rss.xml" target="_blank" title="rss" class="icon i-mdi-rss"></a> </li> </ul> </nav> </header> <footer font-bold text-3 un-flex="~ col gap-1" un-lg="gap-3.5" class="max-lg:hidden"> <p>
+© 2024 <a target="_blank" href="https://www.fanschou.com" rel="noopener noreferrer">Fan Zhou</a> </p> <p> <a target="_blank" href="https://beian.miit.gov.cn/">皖ICP备2021007904号</a> </p> <p> <a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490"> <img src="https://images.fanschou.com/blog/site/beian_gongan.webp" alt="备案" style="float:left;">皖公网安备 34180202000490号
+</a> </p> <!-- <p>
+    Theme
+    <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography" rel="noopener noreferrer">Typography</a>
+      by <a target="_blank" href="https://moeyua.com" rel="noopener noreferrer">Moeyua</a>
+  </p>
+  <p>
+    Proudly published with
+    <a target="_blank" href="https://astro.build" rel="noopener noreferrer">Astro</a>
+  </p> --> </footer> </div> <main un-lg="py-20 min-w-xl animate-fadein-down" class="p-7.5">  <article class="heti"> <header> <h1 class="post-title!"> <a href="/posts/install/tutorial-of-launchd-in-macos/">macOS下Launchd的介绍和使用</a> </h1> <div class="mt-2 text-3.5"> <span>发布于</span> <time>2022-08-19</time> <span>更新于</span><time>2022-08-19</time> <a class="ml-2.5" href="/tags/install">
+# 安装与搭建 </a><a class="ml-2.5" href="/tags/macos">
+# macOS </a><a class="ml-2.5" href="/tags/shell">
+# Shell </a>  </div> </header>  <p>Linux 上如果想后台运行一个服务，或者想定时运行某些脚本有很多的选择，比如使用Systemd或者用crontab也可以，而我手头用的系统是macOS，最近需要在本机后台运行一些脚本，在网上搜了一下，macOS有一个类似的叫 Launchd 的系统，对应使用<code>launchctl</code>命令控制，可以达到类似的效果。</p>
+<h2 id="daemons-and-agents">Daemons and Agents</h2>
+<p>Launchd 管理 Daemons 和 Agents 两种类型的任务，配置文件分别存放在不同的文件夹下，两类任务主要的区别是：</p>
+<ol>
+<li>Agents 是用户登录后执行的</li>
+<li>Daemons 是开机后就执行，可以通过<code>UserName</code>指定用户比如<code>root</code>用户</li>
+</ol>
+<h2 id="配置文件">配置文件</h2>
+<p>Launchd 配置文件以<code>.plist</code>结尾，本质上是<code>xml</code>格式的文件，Daemons 和 Agents 各自存放的路径也不同，具体如下表：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">类型</th><th align="left">路径</th><th align="left">说明</th></tr></thead><tbody><tr><td align="left">User Agents</td><td align="left">~/Library/LaunchAgents</td><td align="left">用户 Agents 当前用户登录时运行</td></tr><tr><td align="left">Global Agents</td><td align="left">/Library/LaunchAgents</td><td align="left">全局 Agents 任何用户登录时都会运行</td></tr><tr><td align="left">Global Daemons</td><td align="left">/System/Library/LaunchAgents</td><td align="left">系统 Agents 任何用户登录时都会运行</td></tr><tr><td align="left">System Agents</td><td align="left">/Library/LaunchDaemons</td><td align="left">全局 Daemons 内核初始化加载完后就运行</td></tr><tr><td align="left">System Daemons</td><td align="left">/System/Library/LaunchDaemons</td><td align="left">系统 Daemons 内核初始化加载完后就运行</td></tr></tbody></table>
+<h3 id="文件格式">文件格式</h3>
+<p>一般配置文件名都以<code>com.domain.programName.plist</code>格式命名，不管是 Daemons 还是 Agents ，它们的配置文件格式都是一样的，只是存放位置不同。看下面一个 hello world 的例子 <code>~/Library/LaunchAgents/com.example.helloword.plist</code></p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="xml"><code><span class="line"><span style="color:#ABB2BF">&#x3C;?</span><span style="color:#E06C75">xml</span><span style="color:#D19A66"> version</span><span style="color:#ABB2BF">=</span><span style="color:#98C379">"1.0"</span><span style="color:#D19A66"> encoding</span><span style="color:#ABB2BF">=</span><span style="color:#98C379">"UTF-8"</span><span style="color:#ABB2BF">?></span></span>
+<span class="line"><span style="color:#ABB2BF">&#x3C;!</span><span style="color:#C678DD">DOCTYPE</span><span style="color:#E5C07B"> plist</span><span style="color:#ABB2BF"> PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"></span></span>
+<span class="line"><span style="color:#ABB2BF">&#x3C;</span><span style="color:#E06C75">plist</span><span style="color:#D19A66"> version</span><span style="color:#ABB2BF">=</span><span style="color:#98C379">"1.0"</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">    &#x3C;</span><span style="color:#E06C75">dict</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        </span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>Label&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">>com.fanschou.helloword&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>StandardOutPath&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">>/Users/fanschou/logs/stdout.log&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>ProgramArguments&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">array</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">            &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">>/bin/echo&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">            &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">>hello world&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;/</span><span style="color:#E06C75">array</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        </span></span>
+<span class="line"><span style="color:#ABB2BF">    &#x3C;/</span><span style="color:#E06C75">dict</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">&#x3C;/</span><span style="color:#E06C75">plist</span><span style="color:#ABB2BF">></span></span>
+<span class="line"></span></code></pre>
+<p>我们可以发现其实就是一个xml格式的文件，除了包裹着整体的<code>plist</code>和<code>dict</code>之外，内部基本就是一个<code>key</code>对应一个这个<code>key</code>具体的值，这个值可以是<code>string</code>也可以是一个<code>array</code>数组。
+上面的样例定义了一个最简单的任务，只使用了<code>Label</code>和<code>ProgramAgruments</code>两个键：</p>
+<ul>
+<li><code>Label</code>这是个必须的键，指定这个任务名</li>
+<li><code>ProgramArguments</code>是带参数的可执行文件或者脚本，上面等同于运行<code>/bin/echo hello world</code>命令，如果执行的程序不带参数可以使用<code>Program</code>键，但一个任务中必须包含这两个中的其中一个键</li>
+</ul>
+<p>还有一些常用的键名，所有的键可通过<code>man 5 launchd.plist</code>查看或者参考<a href="https://www.launchd.info/">这里</a></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">key</th><th align="left">说明</th></tr></thead><tbody><tr><td align="left">Disabled</td><td align="left">是否不生效（launchd 忽略，不执行）</td></tr><tr><td align="left">EnvironmentVariables</td><td align="left">设置运行环境变量</td></tr><tr><td align="left">GroupName</td><td align="left">启动进程的用户组。只在 Daemons 可用</td></tr><tr><td align="left">KeepAlive</td><td align="left">是否设置程序是一直存活着，如果退出就重启</td></tr><tr><td align="left">ProcessType</td><td align="left">进程类型</td></tr><tr><td align="left">RunAtLoad</td><td align="left">是否再加载的时候就运行</td></tr><tr><td align="left">StandardOutPath</td><td align="left">标准输出到文件</td></tr><tr><td align="left">StandardErrorPath</td><td align="left">标准错误到文件</td></tr><tr><td align="left">StartInterval</td><td align="left">设置程序每隔多少秒运行一次</td></tr><tr><td align="left">StartCalendarInterval</td><td align="left">设置程序具体运行时间，类似cron表达式</td></tr><tr><td align="left">UserName</td><td align="left">设置用户名只在 Daemons 可用</td></tr><tr><td align="left">WorkingDirectory</td><td align="left">设置工作目录</td></tr></tbody></table>
+<p>利用这些key，这里给出一个完整一点模板参考：</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="xml"><code><span class="line"><span style="color:#ABB2BF">&#x3C;?</span><span style="color:#E06C75">xml</span><span style="color:#D19A66"> version</span><span style="color:#ABB2BF">=</span><span style="color:#98C379">"1.0"</span><span style="color:#D19A66"> encoding</span><span style="color:#ABB2BF">=</span><span style="color:#98C379">"UTF-8"</span><span style="color:#ABB2BF">?></span></span>
+<span class="line"><span style="color:#ABB2BF">&#x3C;!</span><span style="color:#C678DD">DOCTYPE</span><span style="color:#E5C07B"> plist</span><span style="color:#ABB2BF"> PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"></span></span>
+<span class="line"><span style="color:#ABB2BF">&#x3C;</span><span style="color:#E06C75">plist</span><span style="color:#D19A66"> version</span><span style="color:#ABB2BF">=</span><span style="color:#98C379">"1.0"</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">    &#x3C;</span><span style="color:#E06C75">dict</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>Label&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">>com.fanschou.macos.helloword&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        </span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>Disabled&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">false</span><span style="color:#ABB2BF">/></span></span>
+<span class="line"><span style="color:#ABB2BF">        </span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>KeepAlive&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">true</span><span style="color:#ABB2BF">/></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>RunAtLoad&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">true</span><span style="color:#ABB2BF">/></span></span>
+<span class="line"><span style="color:#ABB2BF">        </span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>ProcessType&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">>Background&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        </span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>ProgramArguments&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">array</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">            &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">>/bin/echo&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">            &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">>hello world&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;/</span><span style="color:#E06C75">array</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        </span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>UserName&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">>root&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        </span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>GroupName&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">>wheel&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>StandardErrorPath&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">>/Users/fanschou/logs/stderr.log&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>StandardOutPath&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">>/Users/fanschou/logs/stdout.log&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>WorkingDirectory&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">>/Users/fanschou/dev/script&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#7F848E;font-style:italic">        &#x3C;!-- 每隔60s运行一次，与下面的不可同时设置--></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>StartInterval&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">integer</span><span style="color:#ABB2BF">>60&#x3C;/</span><span style="color:#E06C75">integer</span><span style="color:#ABB2BF">></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#7F848E;font-style:italic">        &#x3C;!-- 每天10点半运行一次，与上面的不可同时设置--></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>StartCalendarInterval&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">dict</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">            &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>Minute&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">            &#x3C;</span><span style="color:#E06C75">integer</span><span style="color:#ABB2BF">>30&#x3C;/</span><span style="color:#E06C75">integer</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">            &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>Hour&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">            &#x3C;</span><span style="color:#E06C75">integer</span><span style="color:#ABB2BF">>10&#x3C;/</span><span style="color:#E06C75">integer</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;/</span><span style="color:#E06C75">dict</span><span style="color:#ABB2BF">></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>EnvironmentVariables&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;</span><span style="color:#E06C75">dict</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#7F848E;font-style:italic">            &#x3C;!-- 设置PATH，用于找不到命令的时候--></span></span>
+<span class="line"><span style="color:#ABB2BF">            &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>PATH&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">            &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span><span style="color:#98C379">&#x3C;![CDATA[/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin]]></span><span style="color:#ABB2BF">&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#7F848E;font-style:italic">            &#x3C;!-- 设置网络代理--></span></span>
+<span class="line"><span style="color:#ABB2BF">            &#x3C;</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">>http_proxy&#x3C;/</span><span style="color:#E06C75">key</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">            &#x3C;</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span><span style="color:#98C379">&#x3C;![CDATA[http://127.0.0.1:1080]]></span><span style="color:#ABB2BF">&#x3C;/</span><span style="color:#E06C75">string</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">        &#x3C;/</span><span style="color:#E06C75">dict</span><span style="color:#ABB2BF">></span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#ABB2BF">    &#x3C;/</span><span style="color:#E06C75">dict</span><span style="color:#ABB2BF">></span></span>
+<span class="line"><span style="color:#ABB2BF">&#x3C;/</span><span style="color:#E06C75">plist</span><span style="color:#ABB2BF">></span></span>
+<span class="line"></span></code></pre>
+<h3 id="测试文件格式是否正确">测试文件格式是否正确</h3>
+<p>写完<code>.plist</code>文件之后，可以通过<code>plutil</code>命令测试一下文件格式有没有问题。</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#61AFEF">plutil</span><span style="color:#98C379"> ~/Library/LaunchAgents/com.fanschou.helloword.plist</span></span>
+<span class="line"></span></code></pre>
+<p>显示：</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="text"><code><span class="line"><span>/Users/fanschou/Library/LaunchAgents/com.fanschou.helloword.plist: OK</span></span>
+<span class="line"><span></span></span></code></pre>
+<h2 id="操作">操作</h2>
+<p>现在我们就加载和运行一个任务，上面定义了<code>~/Library/LaunchAgents/com.fanschou.helloword.plist</code>，配置中把标准输出重定向到了<code>/Users/fanschou/logs/stdout.log</code>，我们运行测试下。</p>
+<h3 id="加载任务">加载任务</h3>
+<p>第一步需要进行<strong>加载(load)</strong>，使用<code>launchctl load &#x3C;path></code>命令：</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#61AFEF">launchctl</span><span style="color:#98C379"> load</span><span style="color:#D19A66"> -w</span><span style="color:#98C379"> ~/Library/LaunchAgents/com.fanschou.helloword.plist</span></span>
+<span class="line"></span></code></pre>
+<p>这里注意，<code>launchctl load &#x3C;path></code>只会加载没有被<strong>disable</strong>的任务，可以加<code>-w</code>参数 <code>launchctl load -w &#x3C;path></code>覆盖。</p>
+<h3 id="启动任务">启动任务</h3>
+<p>然后手动<strong>启动(start)</strong> 任务，如果配置中设置了<code>RunAtLoad</code>或者<code>KeepAlive</code>为<code>true</code>，则在<code>launchctl load</code>时就会启动。</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#61AFEF">launchctl</span><span style="color:#98C379"> start</span><span style="color:#98C379"> ~/Library/LaunchAgents/com.fanschou.helloword.plist</span></span>
+<span class="line"></span></code></pre>
+<p>我们查看<code>/Users/fanschou/logs/stdout.log</code>会有日志输出。因为这是一个一次性任务，所以正常运行完就会退出，如果是运行一些服务的话，就会以一个守护进程的模式一直运行，直到手动停止，或者报错退出。</p>
+<h3 id="管理任务">管理任务</h3>
+<p>使用<code>launchctl list</code>列出当前加载的任务，第一列代表进程ID，因为上面的helloword程序运行一次就退出了所以显示<code>-</code>，运行中的则显示进程ID；第二列是程序上次运行退出的code，<code>0</code>代表正常退出，如果是正数代表退出的时候是有错误的，负数代表是接收到信号被终止的</p>
+<h3 id="退出任务">退出任务</h3>
+<p>当不想运行任务时，可以通过命令<code>launchctl stop &#x3C;service_name></code>指定服务名终止服务，或者通过<code>launchctl stop &#x3C;path></code>指定路径进行终止：</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#61AFEF">launchctl</span><span style="color:#98C379"> stop</span><span style="color:#98C379"> com.fanschou.helloword</span></span>
+<span class="line"><span style="color:#61AFEF">launchctl</span><span style="color:#98C379"> stop</span><span style="color:#98C379"> ~/Library/LaunchAgents/com.fanschou.helloword.plist</span></span>
+<span class="line"></span></code></pre>
+<h3 id="卸载任务">卸载任务</h3>
+<p>如果不想再使用任务了的话，也可以直接将任务卸载掉，可以通过命令<code>launchctl unload &#x3C;path></code>指定路径卸载一个任务，或者通过<code>launchctl remove &#x3C;service_name></code>指定服务名卸载任务：</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#61AFEF">launchctl</span><span style="color:#98C379"> remove</span><span style="color:#98C379"> com.fanschou.helloword</span></span>
+<span class="line"><span style="color:#61AFEF">launchctl</span><span style="color:#98C379"> unload</span><span style="color:#98C379"> ~/Library/LaunchAgents/com.fanschou.helloword.plist</span></span>
+<span class="line"></span></code></pre>
+<p><code>launchctl unload &#x3C;path></code>只会停止和卸载这个任务，但下次启动还会加载，与加载任务的命令一样，可以使用<code>-w</code>参数<code>launchctl unload -w &#x3C;path></code>停止任务，下次启动也不会起来，也就是相当于标记了<strong>disable</strong></p>
+<h3 id="调试任务">调试任务</h3>
+<p>如果任务跑不起来的话，可以先尝试使用<code>plutil</code>命令检查语法，然后设置<code>StandardOutPath</code>、<code>StandardErrorPath</code>、<code>Debug</code>键，查看具体输出的日志进行调试。</p>  </article> <footer class="mt-5">  <p class="flex items-center gap-2"> <span class="inline-flex items-center"> <i class="i-mdi-chevron-double-left icon"></i> <a href="/posts/devops/apply-for-TLS-certificate-using-acme">上一篇: 使用acme申请TLS证书</a> </span> <span class="inline-flex items-center"> <a href="/posts/algorithm/algorithm-insertion-sort">下一篇: 排序算法系列之插入排序</a> <i class="i-mdi-chevron-double-right icon"></i> </span> </p> </footer> <!-- <footer class="mt-5">
+  <p class="mb-2.5">{t('page_number', page.currentPage)} / {t('page_count', page.lastPage)}</p>
+  <p class="flex items-center gap-2">
+    <span class="inline-flex items-center">
+      <i class="i-mdi-chevron-double-left icon"></i>
+      {page.url.prev ? <a href={page.url.prev}> {t('prev')} </a> : <span>{t('prev')}</span>}
+    </span>
+
+    <span class="inline-flex items-center">
+      {page.url.next ? <a href={page.url.next}>{t('next')}</a> : <span>{t('next')}</span>}
+      <i class="i-mdi-chevron-double-right icon"></i>
+    </span>
+  </p>
+</footer> -->  <div py-16>     </div>  </main> <footer font-bold text-3 un-flex="~ col gap-1" un-lg="gap-3.5" class="lg:hidden p-7.5"> <p>
+© 2024 <a target="_blank" href="https://www.fanschou.com" rel="noopener noreferrer">Fan Zhou</a> </p> <p> <a target="_blank" href="https://beian.miit.gov.cn/">皖ICP备2021007904号</a> </p> <p> <a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490"> <img src="https://images.fanschou.com/blog/site/beian_gongan.webp" alt="备案" style="float:left;">皖公网安备 34180202000490号
+</a> </p> <!-- <p>
+    Theme
+    <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography" rel="noopener noreferrer">Typography</a>
+      by <a target="_blank" href="https://moeyua.com" rel="noopener noreferrer">Moeyua</a>
+  </p>
+  <p>
+    Proudly published with
+    <a target="_blank" href="https://astro.build" rel="noopener noreferrer">Astro</a>
+  </p> --> </footer> </div> </body></html>  

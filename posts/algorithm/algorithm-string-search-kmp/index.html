@@ -1,0 +1,223 @@
+<!DOCTYPE html><html lang="en"> <head><meta name="viewport" content="width=device-width"><meta name="generator" content="Astro v4.9.2"><link rel="sitemap" href="/sitemap-index.xml"><title>浅谈KMP算法</title><meta charset="utf-8"><link rel="canonical" href="https://www.fanschou.com/posts/algorithm/algorithm-string-search-kmp/"><meta name="description" content="Knuth-Morris-Pratt 字符串查找算法（简称为KMP算法）可在一个字符串 S 内查找一个词 W 的出现位置。本文介绍了KMP算法的主要的匹配流程和实现原理，以及它的Java代码实现，并与 JDK 中的 indexOf 方法简单对比了一下。"><meta name="robots" content="index, follow"><meta property="og:title" content="浅谈KMP算法"><meta property="og:type" content="article"><meta property="og:image" content="https://www.fanschou.com/placeholder.png"><meta property="og:url" content="https://www.fanschou.com"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><meta name="twitter:image:src" content="https://www.fanschou.com/placeholder.png"><meta name="twitter:image:alt" content="Knuth-Morris-Pratt 字符串查找算法（简称为KMP算法）可在一个字符串 S 内查找一个词 W 的出现位置。本文介绍了KMP算法的主要的匹配流程和实现原理，以及它的Java代码实现，并与 JDK 中的 indexOf 方法简单对比了一下。"><meta name="twitter:creator"><meta name="twitter:site"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="浅谈KMP算法"><meta name="twitter:description" content="Knuth-Morris-Pratt 字符串查找算法（简称为KMP算法）可在一个字符串 S 内查找一个词 W 的出现位置。本文介绍了KMP算法的主要的匹配流程和实现原理，以及它的Java代码实现，并与 JDK 中的 indexOf 方法简单对比了一下。"><!-- Katex --><link rel="stylesheet" href="/_astro/about.CKOrui31.css">
+<link rel="stylesheet" href="/_astro/about.Q2hPb40S.css">
+<style>.tk-meta-input{background-color:#fff}.code-container{position:relative}.clipboard-copy{position:absolute;top:.5rem;right:.5rem;width:1.75rem;height:1.75rem;display:flex;justify-content:center;align-items:center;border-radius:.25rem}.clipboard-copy:hover{background-color:#30363d}
+</style><script type="module" src="/_astro/hoisted.C1FqLlVV.js"></script>
+<script type="module" src="/_astro/page.DFwqf4PB.js"></script></head> <body> <div un-max-lg="animate-fadein-down" un-lg="flex flex-row-reverse justify-between gap-4 px-8 mx-auto max-w-6xl" class="container contain-layout m-a"> <div un-lg="sticky top-0 h-screen py-20 animate-fadein-left gap-8" un-lg:flex="~ col justify-between items-start gap-4" class="p-7.5"> <header un-lg="grow-1 justify-between items-start" un-flex="~ col gap-2.5" class="text-center"> <hgroup un-hover:lg="bg-foreground color-background pt-3.75 pb-8.75 " un-lg=" write-vertical-right items-start px-2.5 pb-12 b-l-2px b-l-foreground-solid text-left" un-flex="~ col gap-2.5" class="cursor-pointer transition-[padding,background] duration-800 ease-in-out"> <a class="normal" href="/"> <h3 class="text-5 font-extrabold font-serif">Fan Zhou</h3> <h1 class="text-8 font-extrabold font-serif">六脉神间</h1> </a> </hgroup> <nav class="text-center font-bold" un-flex="~ col gap-2"> <ul un-lg="flex-col items-start text-4" class="text-3.5" un-flex="~ row gap-2 justify-center"> <li> <a href="/posts/page/1">文章</a> </li><li> <a href="/archive">归档</a> </li><li> <a href="/tags">标签</a> </li><li> <a href="/about">关于</a> </li> </ul> <ul un-flex="~ row gap-1 justify-center"> <li> <a href="https://github.com/FansChou" target="_blank" title="github" class="icon i-mdi-github"></a> </li><li> <a href="/rss.xml" target="_blank" title="rss" class="icon i-mdi-rss"></a> </li> </ul> </nav> </header> <footer font-bold text-3 un-flex="~ col gap-1" un-lg="gap-3.5" class="max-lg:hidden"> <p>
+© 2024 <a target="_blank" href="https://www.fanschou.com" rel="noopener noreferrer">Fan Zhou</a> </p> <p> <a target="_blank" href="https://beian.miit.gov.cn/">皖ICP备2021007904号</a> </p> <p> <a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490"> <img src="https://images.fanschou.com/blog/site/beian_gongan.webp" alt="备案" style="float:left;">皖公网安备 34180202000490号
+</a> </p> <!-- <p>
+    Theme
+    <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography" rel="noopener noreferrer">Typography</a>
+      by <a target="_blank" href="https://moeyua.com" rel="noopener noreferrer">Moeyua</a>
+  </p>
+  <p>
+    Proudly published with
+    <a target="_blank" href="https://astro.build" rel="noopener noreferrer">Astro</a>
+  </p> --> </footer> </div> <main un-lg="py-20 min-w-xl animate-fadein-down" class="p-7.5">  <article class="heti"> <header> <h1 class="post-title!"> <a href="/posts/algorithm/algorithm-string-search-kmp/">浅谈KMP算法</a> </h1> <div class="mt-2 text-3.5"> <span>发布于</span> <time>2021-05-29</time> <span>更新于</span><time>2021-05-29</time> <a class="ml-2.5" href="/tags/algorithm">
+# 算法 </a><a class="ml-2.5" href="/tags/string">
+# 字符串 </a><a class="ml-2.5" href="/tags/leetcode">
+# Leetcode </a>  </div> </header>  <h2 id="引言">引言</h2>
+<p>前段时间在leetcode刷到了一道题——<a href="https://leetcode-cn.com/problems/implement-strstr/description/">实现strStr函数</a>，大概意思是：给你两个字符串 <code>haystack</code> 和 <code>needle</code> ，请你在 <code>haystack</code> 字符串中找出 <code>needle</code> 字符串出现的第一个位置（下标从 0 开始）。如果不存在，则返回 -1。功能相当于Java类库中 <code>String</code> 类的 <code>indexOf</code> 方法。</p>
+<p>从官方题解中了解到本文题目中的KMP算法，解释的不是特别明白，于是自己去看了一些文章，觉得还是比较巧妙的，应该自己总结一下思路，下面直接开始。</p>
+<h2 id="kmp的匹配思路">KMP的匹配思路</h2>
+<h3 id="算法流程">算法流程</h3>
+<p>我们先引入一个例子，有一个字符串 <code>haystack = "BBC ABCDAB ABCDABCDABDE"</code> ，我们要在它的内部找到一个字符串 <code>needle = "ABCDABD"</code> 的位置，为了描述方便，我们称字符串 <code>haystack</code> 为<strong>源字符串</strong>，称字符串 <code>needle</code> 为<strong>搜索词</strong>。</p>
+<p>首先，<strong>源字符串</strong>的第一个字符与<strong>搜索词</strong>的第一个字符，进行比较。因为 B 与 A 不匹配，所以<strong>搜索词</strong>后移一位。</p>
+<p><img src="https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_001.webp" alt="比较第一位"></p>
+<p>因为第二个字符 B 与 A 不匹配，<strong>搜索词</strong>再往后移。</p>
+<p><img src="https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_002.webp" alt="比较第二位"></p>
+<p>就这样，直到<strong>源字符串</strong>有一个字符，与<strong>搜索词</strong>的第一个字符相同为止。</p>
+<p><img src="https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_003.webp" alt="第一次匹配"></p>
+<p>我们持续比较<strong>源字符串</strong>和<strong>搜索词</strong>的字符，直到<strong>源字符串</strong>有一个字符，与<strong>搜索词</strong>对应的字符不相同为止。</p>
+<p><img src="https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_004.webp" alt="匹配失败"></p>
+<p>这时，我们第一反应是和之前一样，依然往后移动一个字符，再从第一个字符开始，逐个往后比较。这样做也是可行的，但是效率比较差，因为有部分位置的字符已经比较过了，我们没有利用上之前已经比较过的结果。</p>
+<p>那么怎么利用上呢？一个基本事实是，当空格与D不匹配时，你其实知道前面六个字符是”ABCDAB”。KMP算法的想法是，设法利用这个已知信息，可以更大程度的后移，“跳过”已经比较过的字符，这样就提高了效率。</p>
+<p>我们先假设有一张《部分匹配表》（Partial Match Table）。这张表是如何产生的，<a href="#%E9%83%A8%E5%88%86%E5%8C%B9%E9%85%8D%E8%A1%A8%E7%9A%84%E4%BA%A7%E7%94%9F">后面</a>再介绍，这里暂时先拿来用就可以了。这张表的内容如下：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="center">搜索词</th><th align="center">A</th><th align="center">B</th><th align="center">C</th><th align="center">D</th><th align="center">A</th><th align="center">B</th><th align="center">D</th></tr></thead><tbody><tr><td align="center">部分匹配值</td><td align="center">0</td><td align="center">0</td><td align="center">0</td><td align="center">0</td><td align="center">1</td><td align="center">2</td><td align="center">0</td></tr></tbody></table>
+<p>已知空格与D不匹配时，前面六个字符”ABCDAB”是匹配的。查表可知，最后一个匹配字符B对应的<code>部分匹配值</code>为2，因此按照下面的公式算出向后移动的位数：</p>
+<blockquote>
+<p>移动位数 = 已匹配的字符数 - 对应的部分匹配值</p>
+</blockquote>
+<p>计算移动位数 = 6 - 2，得到4，所以将<strong>搜索词</strong>向后移动4位。</p>
+<p><img src="https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_005.webp" alt="移位"></p>
+<p>因为空格与Ｃ不匹配，<strong>搜索词</strong>还要继续往后移。这时，已匹配的字符数为2（“AB”），对应的<code>部分匹配值</code>为0。所以，移动位数 = 2 - 0，结果为 2，于是将<strong>搜索词</strong>向后移2位。</p>
+<p><img src="https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_006.webp" alt="移位"></p>
+<p>因为空格与A不匹配，<strong>搜索词</strong>继续后移一位。</p>
+<p><img src="https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_007.webp" alt="移位"></p>
+<p>逐位比较，直到发现C与D不匹配。这时，已匹配的字符数为6（“ABCDAB”），对应的<code>部分匹配值</code>为2。于是，移动位数 = 6 - 2，继续将<strong>搜索词</strong>向后移动4位。</p>
+<p><img src="https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_008.webp" alt="移位"></p>
+<p>逐位比较，直到<strong>搜索词</strong>的最后一位，发现完全匹配，于是搜索完成。如果还要继续搜索（即找出全部匹配），移动位数 = 7 - 0，再将<strong>搜索词</strong>向后移动7位，这里就不再重复了。</p>
+<h3 id="部分匹配表的产生">部分匹配表的产生</h3>
+<p>下面开始介绍上面的部分匹配表如何产生的，首先我们先来理解两个概念：<code>前缀</code>和<code>后缀</code>。</p>
+<ul>
+<li><strong>前缀</strong>：指除了最后一个字符以外，一个字符串的全部头部组合。以上面的搜索词为例，就是[A,AB,ABC,ABCD,ABCDA,ABCDAB]</li>
+<li><strong>后缀</strong>：指除了第一个字符以外，一个字符串的全部尾部组合。以上面的搜索词为例，就是[BCDABD,CDABD,DABD,ABD,BD,D]</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="center">搜索词</th><th align="center">A</th><th align="center">B</th><th align="center">C</th><th align="center">D</th><th align="center">A</th><th align="center">B</th><th align="center">D</th></tr></thead><tbody><tr><td align="center">部分匹配值</td><td align="center">0</td><td align="center">0</td><td align="center">0</td><td align="center">0</td><td align="center">1</td><td align="center">2</td><td align="center">0</td></tr></tbody></table>
+<p>我们再来看上面那张部分匹配表，<code>部分匹配值</code>就是<code>前缀</code>和<code>后缀</code>的最长的共有元素的长度。如何理解呢？我们还是以上面的搜索词为例：</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="plain"><code><span class="line"><span>- "A"的前缀和后缀都为空集，共有元素的长度为0；</span></span>
+<span class="line"><span>- "AB"的前缀为[A]，后缀为[B]，共有元素的长度为0；</span></span>
+<span class="line"><span>- "ABC"的前缀为[A, AB]，后缀为[BC, C]，共有元素的长度0；</span></span>
+<span class="line"><span>- "ABCD"的前缀为[A, AB, ABC]，后缀为[BCD, CD, D]，共有元素的长度为0；</span></span>
+<span class="line"><span>- "ABCDA"的前缀为[A, AB, ABC, ABCD]，后缀为[BCDA, CDA, DA, A]，共有元素为"A"，长度为1；</span></span>
+<span class="line"><span>- "ABCDAB"的前缀为[A, AB, ABC, ABCD, ABCDA]，后缀为[BCDAB, CDAB, DAB, AB, B]，共有元素为"AB"，长度为2；</span></span>
+<span class="line"><span>- "ABCDABD"的前缀为[A, AB, ABC, ABCD, ABCDA, ABCDAB]，后缀为[BCDABD, CDABD, DABD, ABD, BD, D]，共有元素的长度为0。</span></span>
+<span class="line"><span></span></span></code></pre>
+<p>我们可以看出，以搜索词的开头到当前字符作为一个子串，然后以这个子串的<code>前缀</code>和<code>后缀</code>的最长的共有元素的长度作为当前位置的部分匹配值。</p>
+<p>那么，为什么可以利用部分匹配值跳过一串已匹配的字符串呢？其实，“部分匹配”的实质是，有时候，搜索词头部和尾部会有重复。比如，“ABCDAB”之中有两个”AB”，那么它的<code>部分匹配值</code>就是2（“AB”的长度）。<strong>搜索词</strong>移动的时候，第一个”AB”向后移动4位（字符串长度-部分匹配值），就可以来到第二个”AB”的位置，此时，我们可以保证至少在前两个字符内，<strong>源字符串</strong>和<strong>搜索词</strong>是匹配的，跳过了一些根本不可能匹配上的字符。</p>
+<h3 id="动图展示">动图展示</h3>
+<p>下面我们通过一张动图展示整个过程</p>
+<p><img src="https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_010.gif" alt="动图展示"></p>
+<h3 id="代码实现">代码实现</h3>
+<p>经过上面的分析，我们再来应用KMP算法来实现一下<a href="#%E5%BC%95%E8%A8%80">引言</a>中提到的 <code>strStr</code> 函数。基本思路就是先使用<strong>搜索词</strong>生成一个部分匹配表，然后依据这个部分匹配表进行搜索，代码如下：</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="java"><code><span class="line"><span style="color:#C678DD">public</span><span style="color:#C678DD"> int</span><span style="color:#61AFEF"> strStr</span><span style="color:#E06C75">(</span><span style="color:#E5C07B">String</span><span style="color:#E06C75"> haystack</span><span style="color:#ABB2BF">,</span><span style="color:#E5C07B"> String</span><span style="color:#E06C75"> needle) {</span></span>
+<span class="line"><span style="color:#C678DD">    if</span><span style="color:#E06C75">(</span><span style="color:#E5C07B">needle</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">length</span><span style="color:#ABB2BF">()</span><span style="color:#56B6C2"> ==</span><span style="color:#D19A66"> 0</span><span style="color:#E06C75">){</span></span>
+<span class="line"><span style="color:#C678DD">        return</span><span style="color:#D19A66"> 0</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C678DD">    int</span><span style="color:#E06C75"> h </span><span style="color:#56B6C2">=</span><span style="color:#E5C07B"> haystack</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">length</span><span style="color:#ABB2BF">();</span></span>
+<span class="line"><span style="color:#C678DD">    int</span><span style="color:#E06C75"> n </span><span style="color:#56B6C2">=</span><span style="color:#E5C07B"> needle</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">length</span><span style="color:#ABB2BF">();</span></span>
+<span class="line"><span style="color:#C678DD">    int</span><span style="color:#E06C75">[] pmt </span><span style="color:#56B6C2">=</span><span style="color:#C678DD"> new</span><span style="color:#C678DD"> int</span><span style="color:#E06C75">[n]</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C678DD">    for</span><span style="color:#E06C75"> (</span><span style="color:#C678DD">int</span><span style="color:#E06C75"> i </span><span style="color:#56B6C2">=</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">,</span><span style="color:#E06C75"> j </span><span style="color:#56B6C2">=</span><span style="color:#D19A66"> 0</span><span style="color:#ABB2BF">;</span><span style="color:#E06C75"> i </span><span style="color:#56B6C2">&#x3C;</span><span style="color:#E06C75"> n</span><span style="color:#ABB2BF">;</span><span style="color:#E06C75"> i</span><span style="color:#ABB2BF">++</span><span style="color:#E06C75">) {</span></span>
+<span class="line"><span style="color:#C678DD">        while</span><span style="color:#E06C75">(j </span><span style="color:#56B6C2">></span><span style="color:#D19A66"> 0</span><span style="color:#56B6C2"> &#x26;&#x26;</span><span style="color:#E5C07B"> needle</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">charAt</span><span style="color:#ABB2BF">(i)</span><span style="color:#56B6C2"> !=</span><span style="color:#E5C07B"> needle</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">charAt</span><span style="color:#ABB2BF">(j)</span><span style="color:#E06C75">){</span></span>
+<span class="line"><span style="color:#E06C75">            j </span><span style="color:#56B6C2">=</span><span style="color:#E06C75"> pmt[j </span><span style="color:#56B6C2">-</span><span style="color:#D19A66"> 1</span><span style="color:#E06C75">]</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">        }</span></span>
+<span class="line"><span style="color:#C678DD">        if</span><span style="color:#E06C75">(</span><span style="color:#E5C07B">needle</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">charAt</span><span style="color:#ABB2BF">(i)</span><span style="color:#56B6C2"> ==</span><span style="color:#E5C07B"> needle</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">charAt</span><span style="color:#ABB2BF">(j)</span><span style="color:#E06C75">){</span></span>
+<span class="line"><span style="color:#E06C75">            j</span><span style="color:#ABB2BF">++;</span></span>
+<span class="line"><span style="color:#E06C75">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E06C75">        pmt[i] </span><span style="color:#56B6C2">=</span><span style="color:#E06C75"> j</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C678DD">    for</span><span style="color:#E06C75"> (</span><span style="color:#C678DD">int</span><span style="color:#E06C75"> i </span><span style="color:#56B6C2">=</span><span style="color:#D19A66"> 0</span><span style="color:#ABB2BF">,</span><span style="color:#E06C75"> j </span><span style="color:#56B6C2">=</span><span style="color:#D19A66"> 0</span><span style="color:#ABB2BF">;</span><span style="color:#E06C75"> i </span><span style="color:#56B6C2">&#x3C;</span><span style="color:#E06C75"> h</span><span style="color:#ABB2BF">;</span><span style="color:#E06C75"> i</span><span style="color:#ABB2BF">++</span><span style="color:#E06C75">) {</span></span>
+<span class="line"><span style="color:#C678DD">        while</span><span style="color:#E06C75">(j </span><span style="color:#56B6C2">></span><span style="color:#D19A66"> 0</span><span style="color:#56B6C2"> &#x26;&#x26;</span><span style="color:#E5C07B"> haystack</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">charAt</span><span style="color:#ABB2BF">(i)</span><span style="color:#56B6C2"> !=</span><span style="color:#E5C07B"> needle</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">charAt</span><span style="color:#ABB2BF">(j)</span><span style="color:#E06C75">){</span></span>
+<span class="line"><span style="color:#E06C75">            j </span><span style="color:#56B6C2">=</span><span style="color:#E06C75"> pmt[j </span><span style="color:#56B6C2">-</span><span style="color:#D19A66"> 1</span><span style="color:#E06C75">]</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">        }</span></span>
+<span class="line"><span style="color:#C678DD">        if</span><span style="color:#E06C75">(</span><span style="color:#E5C07B">haystack</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">charAt</span><span style="color:#ABB2BF">(i)</span><span style="color:#56B6C2"> ==</span><span style="color:#E5C07B"> needle</span><span style="color:#ABB2BF">.</span><span style="color:#61AFEF">charAt</span><span style="color:#ABB2BF">(j)</span><span style="color:#E06C75">){</span></span>
+<span class="line"><span style="color:#E06C75">            j</span><span style="color:#ABB2BF">++;</span></span>
+<span class="line"><span style="color:#E06C75">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C678DD">        if</span><span style="color:#E06C75">(j </span><span style="color:#56B6C2">==</span><span style="color:#E06C75"> n){</span></span>
+<span class="line"><span style="color:#C678DD">            return</span><span style="color:#E06C75"> i </span><span style="color:#56B6C2">-</span><span style="color:#E06C75"> n </span><span style="color:#56B6C2">+</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">        }</span></span>
+<span class="line"><span style="color:#E06C75">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C678DD">    return</span><span style="color:#56B6C2"> -</span><span style="color:#D19A66">1</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">}</span></span>
+<span class="line"></span></code></pre>
+<h2 id="结尾">结尾</h2>
+<p>依据KMP算法实现并提交代码之后，leetcode很快就执行通过了，看到执行时间，想着KMP算法还是比较精妙的嘛。此时，我突然想起来我刚开始刷leetcode的时候，是按题序刷的（刷过的应该知道，题目难度是忽上忽下），刷过这道题并且实现也比较粗暴，是直接调用Java类库String的indexOf方法解决的，于是我打开了提交记录，</p>
+<p><img src="https://images.fanschou.com/blog/algorithm-string-search-KMP/20210529_01_009.webp" alt="leetcode提交记录"></p>
+<p>我很惊奇，因为上次提交的比这次还要快。我就升起了好奇心，JDK源码究竟是如何实现的呢？于是乎，我点开了JDK的源码：</p>
+<pre class="astro-code one-dark-pro" style="background-color:#282c34;color:#abb2bf; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" data-language="java"><code><span class="line"><span style="color:#C678DD">static</span><span style="color:#C678DD"> int</span><span style="color:#61AFEF"> indexOf</span><span style="color:#E06C75">(</span><span style="color:#C678DD">char</span><span style="color:#E06C75">[] source</span><span style="color:#ABB2BF">,</span><span style="color:#C678DD"> int</span><span style="color:#E06C75"> sourceOffset</span><span style="color:#ABB2BF">,</span><span style="color:#C678DD"> int</span><span style="color:#E06C75"> sourceCount</span><span style="color:#ABB2BF">,</span></span>
+<span class="line"><span style="color:#C678DD">        char</span><span style="color:#E06C75">[] target</span><span style="color:#ABB2BF">,</span><span style="color:#C678DD"> int</span><span style="color:#E06C75"> targetOffset</span><span style="color:#ABB2BF">,</span><span style="color:#C678DD"> int</span><span style="color:#E06C75"> targetCount</span><span style="color:#ABB2BF">,</span></span>
+<span class="line"><span style="color:#C678DD">        int</span><span style="color:#E06C75"> fromIndex) {</span></span>
+<span class="line"><span style="color:#C678DD">    if</span><span style="color:#E06C75"> (fromIndex </span><span style="color:#56B6C2">>=</span><span style="color:#E06C75"> sourceCount) {</span></span>
+<span class="line"><span style="color:#C678DD">        return</span><span style="color:#E06C75"> (targetCount </span><span style="color:#56B6C2">==</span><span style="color:#D19A66"> 0</span><span style="color:#C678DD"> ?</span><span style="color:#E06C75"> sourceCount </span><span style="color:#C678DD">:</span><span style="color:#56B6C2"> -</span><span style="color:#D19A66">1</span><span style="color:#E06C75">)</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">    }</span></span>
+<span class="line"><span style="color:#C678DD">    if</span><span style="color:#E06C75"> (fromIndex </span><span style="color:#56B6C2">&#x3C;</span><span style="color:#D19A66"> 0</span><span style="color:#E06C75">) {</span></span>
+<span class="line"><span style="color:#E06C75">        fromIndex </span><span style="color:#56B6C2">=</span><span style="color:#D19A66"> 0</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">    }</span></span>
+<span class="line"><span style="color:#C678DD">    if</span><span style="color:#E06C75"> (targetCount </span><span style="color:#56B6C2">==</span><span style="color:#D19A66"> 0</span><span style="color:#E06C75">) {</span></span>
+<span class="line"><span style="color:#C678DD">        return</span><span style="color:#E06C75"> fromIndex</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C678DD">    char</span><span style="color:#E06C75"> first </span><span style="color:#56B6C2">=</span><span style="color:#E06C75"> target[targetOffset]</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#C678DD">    int</span><span style="color:#E06C75"> max </span><span style="color:#56B6C2">=</span><span style="color:#E06C75"> sourceOffset </span><span style="color:#56B6C2">+</span><span style="color:#E06C75"> (sourceCount </span><span style="color:#56B6C2">-</span><span style="color:#E06C75"> targetCount)</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C678DD">    for</span><span style="color:#E06C75"> (</span><span style="color:#C678DD">int</span><span style="color:#E06C75"> i </span><span style="color:#56B6C2">=</span><span style="color:#E06C75"> sourceOffset </span><span style="color:#56B6C2">+</span><span style="color:#E06C75"> fromIndex</span><span style="color:#ABB2BF">;</span><span style="color:#E06C75"> i </span><span style="color:#56B6C2">&#x3C;=</span><span style="color:#E06C75"> max</span><span style="color:#ABB2BF">;</span><span style="color:#E06C75"> i</span><span style="color:#ABB2BF">++</span><span style="color:#E06C75">) {</span></span>
+<span class="line"><span style="color:#7F848E;font-style:italic">        /* Look for first character. */</span></span>
+<span class="line"><span style="color:#C678DD">        if</span><span style="color:#E06C75"> (source[i] </span><span style="color:#56B6C2">!=</span><span style="color:#E06C75"> first) {</span></span>
+<span class="line"><span style="color:#C678DD">            while</span><span style="color:#E06C75"> (</span><span style="color:#ABB2BF">++</span><span style="color:#E06C75">i </span><span style="color:#56B6C2">&#x3C;=</span><span style="color:#E06C75"> max </span><span style="color:#56B6C2">&#x26;&#x26;</span><span style="color:#E06C75"> source[i] </span><span style="color:#56B6C2">!=</span><span style="color:#E06C75"> first)</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#7F848E;font-style:italic">        /* Found first character, now look at the rest of v2 */</span></span>
+<span class="line"><span style="color:#C678DD">        if</span><span style="color:#E06C75"> (i </span><span style="color:#56B6C2">&#x3C;=</span><span style="color:#E06C75"> max) {</span></span>
+<span class="line"><span style="color:#C678DD">            int</span><span style="color:#E06C75"> j </span><span style="color:#56B6C2">=</span><span style="color:#E06C75"> i </span><span style="color:#56B6C2">+</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#C678DD">            int</span><span style="color:#E06C75"> end </span><span style="color:#56B6C2">=</span><span style="color:#E06C75"> j </span><span style="color:#56B6C2">+</span><span style="color:#E06C75"> targetCount </span><span style="color:#56B6C2">-</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#C678DD">            for</span><span style="color:#E06C75"> (</span><span style="color:#C678DD">int</span><span style="color:#E06C75"> k </span><span style="color:#56B6C2">=</span><span style="color:#E06C75"> targetOffset </span><span style="color:#56B6C2">+</span><span style="color:#D19A66"> 1</span><span style="color:#ABB2BF">;</span><span style="color:#E06C75"> j </span><span style="color:#56B6C2">&#x3C;</span><span style="color:#E06C75"> end </span><span style="color:#56B6C2">&#x26;&#x26;</span><span style="color:#E06C75"> source[j]</span></span>
+<span class="line"><span style="color:#56B6C2">                    ==</span><span style="color:#E06C75"> target[k]</span><span style="color:#ABB2BF">;</span><span style="color:#E06C75"> j</span><span style="color:#ABB2BF">++,</span><span style="color:#E06C75"> k</span><span style="color:#ABB2BF">++</span><span style="color:#E06C75">)</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#C678DD">            if</span><span style="color:#E06C75"> (j </span><span style="color:#56B6C2">==</span><span style="color:#E06C75"> end) {</span></span>
+<span class="line"><span style="color:#7F848E;font-style:italic">                /* Found whole string. */</span></span>
+<span class="line"><span style="color:#C678DD">                return</span><span style="color:#E06C75"> i </span><span style="color:#56B6C2">-</span><span style="color:#E06C75"> sourceOffset</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">            }</span></span>
+<span class="line"><span style="color:#E06C75">        }</span></span>
+<span class="line"><span style="color:#E06C75">    }</span></span>
+<span class="line"><span style="color:#C678DD">    return</span><span style="color:#56B6C2"> -</span><span style="color:#D19A66">1</span><span style="color:#ABB2BF">;</span></span>
+<span class="line"><span style="color:#E06C75">}</span></span>
+<span class="line"></span></code></pre>
+<p>嗯……暴力循环，果然，功夫再高，也怕菜刀:)</p>  </article> <footer class="mt-5">  <p class="flex items-center gap-2"> <span class="inline-flex items-center"> <i class="i-mdi-chevron-double-left icon"></i> <a href="/posts/algorithm/algorithm-sort-opening">上一篇: 排序算法系列之开篇</a> </span> <span class="inline-flex items-center"> <a href="/posts/install/kafka-install-steps">下一篇: kafka安装配置</a> <i class="i-mdi-chevron-double-right icon"></i> </span> </p> </footer> <!-- <footer class="mt-5">
+  <p class="mb-2.5">{t('page_number', page.currentPage)} / {t('page_count', page.lastPage)}</p>
+  <p class="flex items-center gap-2">
+    <span class="inline-flex items-center">
+      <i class="i-mdi-chevron-double-left icon"></i>
+      {page.url.prev ? <a href={page.url.prev}> {t('prev')} </a> : <span>{t('prev')}</span>}
+    </span>
+
+    <span class="inline-flex items-center">
+      {page.url.next ? <a href={page.url.next}>{t('next')}</a> : <span>{t('next')}</span>}
+      <i class="i-mdi-chevron-double-right icon"></i>
+    </span>
+  </p>
+</footer> -->  <div py-16>     </div>  </main> <footer font-bold text-3 un-flex="~ col gap-1" un-lg="gap-3.5" class="lg:hidden p-7.5"> <p>
+© 2024 <a target="_blank" href="https://www.fanschou.com" rel="noopener noreferrer">Fan Zhou</a> </p> <p> <a target="_blank" href="https://beian.miit.gov.cn/">皖ICP备2021007904号</a> </p> <p> <a target="_blank" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34180202000490"> <img src="https://images.fanschou.com/blog/site/beian_gongan.webp" alt="备案" style="float:left;">皖公网安备 34180202000490号
+</a> </p> <!-- <p>
+    Theme
+    <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography" rel="noopener noreferrer">Typography</a>
+      by <a target="_blank" href="https://moeyua.com" rel="noopener noreferrer">Moeyua</a>
+  </p>
+  <p>
+    Proudly published with
+    <a target="_blank" href="https://astro.build" rel="noopener noreferrer">Astro</a>
+  </p> --> </footer> </div> </body></html>  
